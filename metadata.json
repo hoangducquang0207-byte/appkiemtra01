@@ -1,0 +1,6 @@
+{
+  "name": "QuickQuiz THCS & THPT",
+  "description": "Hệ thống kiểm tra, rèn luyện đa môn học THCS và THPT thông minh hỗ trợ ma trận đề thi",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
