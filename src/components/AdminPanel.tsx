@@ -341,19 +341,40 @@ export default function AdminPanel({
         };
       }
       
-      const res = await fetch('/api/sync-state', {
-        method: 'POST',
+      const isLocalOrPre = window.location.hostname === 'localhost' || window.location.hostname.includes('.run.app');
+      let expressSuccess = false;
+
+      // 1. Try syncing to Express first if supported
+      if (isLocalOrPre) {
+        try {
+          const res = await fetch('/api/sync-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            expressSuccess = true;
+          }
+        } catch (e) {
+          console.warn('Express sync failed in AdminPanel, trying KV fallback...');
+        }
+      }
+
+      // 2. Always write to public cloud KV store for double durability (essential for Vercel/GitHub Pages)
+      const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_sync_db';
+      const resKv = await fetch(KV_URL, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
-      if (res.ok) {
-        showLocalToast('✔ ĐÃ ĐỒNG BỘ: Cấu trình học trình, câu hỏi và lớp học đã được cập nhật thành công lên Máy chủ!');
+
+      if (resKv.ok || expressSuccess) {
+        showLocalToast('✔ ĐÃ ĐỒNG BỘ: Toàn bộ Cấu trình học trình, câu hỏi, mật khẩu giáo viên đã đồng bộ đám mây thành công!');
       } else {
-        showLocalToast('Lỗi khi lưu đồng bộ lên Máy chủ!');
+        showLocalToast('Lỗi khi truyền đồng bộ đám mây!');
       }
     } catch (err) {
-      showLocalToast('Có lỗi xảy ra khi kết nối máy chủ để đồng bộ!');
+      showLocalToast('Có lỗi kết nối khi lưu trữ đồng bộ!');
     }
   };
 

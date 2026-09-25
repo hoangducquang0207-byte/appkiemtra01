@@ -291,31 +291,88 @@ export default function App() {
     }
   }, []);
 
-  // Synchronize state with central Server database on startup
+  // Helper to sync state to/from server DB or public cloud KV database (e.g. on Vercel/GitHub Pages)
+  const syncWithServerDb = async (action: 'read' | 'write', payloadToSave?: any) => {
+    const isLocalOrPre = window.location.hostname === 'localhost' || window.location.hostname.includes('.run.app');
+    const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_sync_db';
+
+    if (action === 'write' && payloadToSave) {
+      // 1. Try to post to Express backend if on supported host
+      if (isLocalOrPre) {
+        try {
+          const res = await fetch('/api/sync-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadToSave)
+          });
+          if (res.ok) return;
+        } catch (err) {
+          console.warn('Express sync failed, falling back to public KV store...', err);
+        }
+      }
+
+      // 2. Fallback to public cloud KV store (handles Vercel and GitHub Pages static servers)
+      try {
+        await fetch(KV_URL, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadToSave)
+        });
+      } catch (err) {
+        console.error('Public KV sync failed:', err);
+      }
+    } else if (action === 'read') {
+      // 1. Try to fetch from Express backend if on supported host
+      if (isLocalOrPre) {
+        try {
+          const res = await fetch('/api/sync-state');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.db) {
+              return data.db;
+            }
+          }
+        } catch (err) {
+          console.warn('Express fetch failed, falling back to public KV store...', err);
+        }
+      }
+
+      // 2. Fallback to public cloud KV store (handles Vercel and GitHub Pages static servers)
+      try {
+        const res = await fetch(KV_URL);
+        if (res.ok) {
+          const db = await res.json();
+          return db;
+        }
+      } catch (err) {
+        console.error('Public KV fetch failed:', err);
+      }
+    }
+    return null;
+  };
+
+  // Synchronize state with central database on startup
   useEffect(() => {
     const fetchCentralDatabase = async () => {
       try {
-        const res = await fetch('/api/sync-state');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data && data.success && data.db) {
-          const db = data.db;
-          
-          // If the server database is empty, push our current data to populate it!
-          if (!db.teachers || db.teachers.length === 0) {
-            const existing = localStorage.getItem(APP_ID);
-            const parsed = existing ? JSON.parse(existing) : null;
-            if (parsed) {
-              await fetch('/api/sync-state', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(parsed)
-              });
+        const db = await syncWithServerDb('read');
+        if (db) {
+          // If the central database is empty (first initialization), and the current user is admin, push current state
+          const hasCentralData = db.teachers && db.teachers.length > 0;
+          if (!hasCentralData) {
+            const currentUserEmail = currentUser?.email || '';
+            const isAdminUser = currentUserEmail.toLowerCase() === 'hoangducquang0207@gmail.com' || currentUserEmail.toLowerCase() === 'gv@quickquiz.vn';
+            if (isAdminUser) {
+              const existing = localStorage.getItem(APP_ID);
+              const parsed = existing ? JSON.parse(existing) : null;
+              if (parsed) {
+                await syncWithServerDb('write', parsed);
+              }
             }
             return;
           }
 
-          // Otherwise, overwrite local states with the centralized server database!
+          // Otherwise, overwrite local states with the centralized database!
           if (db.teachers && db.teachers.length > 0) {
             setTeachers(db.teachers);
           }
@@ -358,15 +415,14 @@ export default function App() {
       }
     };
 
-    // Run sync after a brief delay so state has initialized from localStorage
     const timer = setTimeout(() => {
       fetchCentralDatabase();
-    }, 500);
+    }, 600);
 
     return () => clearTimeout(timer);
   }, []);
 
-  // Sync state to local storage helper and central backend
+  // Sync state to local storage helper and central backend / public cloud KV
   const syncToLocalStorage = (updatedState: Partial<GlobalState>) => {
     try {
       const existing = localStorage.getItem(APP_ID);
@@ -383,12 +439,8 @@ export default function App() {
       };
       localStorage.setItem(APP_ID, JSON.stringify(payload));
 
-      // Also sync to central server database asynchronously
-      fetch('/api/sync-state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(err => console.warn('Server sync failed:', err));
+      // Asynchronously synchronize with server/cloud KV
+      syncWithServerDb('write', payload);
 
     } catch (err) {
       console.error('Error saving state:', err);
