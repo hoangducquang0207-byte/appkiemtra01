@@ -5,6 +5,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Question, QuestionType, QuestionLevel, Syllabus } from '../types';
+import { DEFAULT_QUESTIONS } from '../data';
 import MathText from './MathText';
 import { 
   Plus, Search, Trash, BookOpen, Layers, CheckSquare, Sparkles, 
@@ -16,8 +17,9 @@ interface QuestionBankProps {
   questions: Question[];
   syllabus?: Syllabus[];
   onAddQuestion: (q: Omit<Question, 'id' | 'source' | 'status'> | Omit<Question, 'id' | 'source' | 'status'>[]) => void;
-  onDeleteQuestion: (id: string) => void;
+  onDeleteQuestion: (idOrIds: string | string[]) => void;
   onUpdateQuestion?: (id: string, updatedFields: Partial<Question>) => void;
+  showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 interface ParsedBatchQuestion {
@@ -36,7 +38,7 @@ interface ParsedBatchQuestion {
   requiredOutcome?: string;
 }
 
-export default function QuestionBank({ questions, syllabus = [], onAddQuestion, onDeleteQuestion, onUpdateQuestion }: QuestionBankProps) {
+export default function QuestionBank({ questions, syllabus = [], onAddQuestion, onDeleteQuestion, onUpdateQuestion, showToast }: QuestionBankProps) {
   // Creator tab: 'manual' or 'import'
   const [activeCreatorTab, setActiveCreatorTab] = useState<'manual' | 'import'>('manual');
 
@@ -426,6 +428,7 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
   // TXT EXTRACT AUTOMATION PARSER WITH SYLLABUS RESOLUTION
   // -----------------------------------------------------------------
   const parseUploadedText = (text: string): ParsedBatchQuestion[] => {
+    const cleanText = text.replace(/^\uFEFF/, '').trim();
     const parsedQuestions: ParsedBatchQuestion[] = [];
 
     const isStringSimilar = (str1: string, str2: string): boolean => {
@@ -450,17 +453,37 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
     };
 
     let textBlocks: string[] = [];
-    const lowerText = text.toLowerCase();
+    const lowerText = cleanText.toLowerCase();
     
+    // Count occurrences of Môn header keywords to see if metadata is repeated per question or is a single global header
+    const monCount = (lowerText.match(/môn\s*[:\-]/g) || []).length;
+    const monHocCount = (lowerText.match(/môn\s+học\s*[:\-]/g) || []).length;
+    const hasMultipleMon = (monCount + monHocCount) >= 2;
+
     // Split by blocks
-    if (lowerText.includes('môn:') || lowerText.includes('môn học:')) {
-      textBlocks = text.split(/(?=(?:^|\n)Môn\s*[:\-])/gi);
+    if (hasMultipleMon) {
+      textBlocks = cleanText.split(/(?=(?:^|[\r\n]+)\s*Môn\s*[:\-])/gi);
     } else {
-      textBlocks = text.split(/(?=(?:^|\n)Câu\s*\d+\s*[:\.])|(?=(?:^|\n)Câu\s*[:\.])/gi);
+      textBlocks = cleanText.split(/(?=(?:^|[\r\n]+)\s*Câu\s*\d+\s*[:\.])|(?=(?:^|[\r\n]+)\s*Câu\s*[:\.])/gi);
     }
 
-    // Remove empty/whitespace-only blocks
-    textBlocks = textBlocks.map(b => b.trim()).filter(b => b.length > 0);
+    // Remove empty/whitespace-only blocks and non-question instructions
+    textBlocks = textBlocks.map(b => b.trim()).filter(b => {
+      if (b.length === 0) return false;
+      const lowerB = b.toLowerCase();
+      if (hasMultipleMon) {
+        return lowerB.includes('môn:') || lowerB.includes('môn học:') || lowerB.includes('môn -');
+      }
+      return (
+        lowerB.includes('câu:') || 
+        lowerB.includes('câu ') || 
+        lowerB.includes('cau:') || 
+        lowerB.includes('cau ') ||
+        lowerB.includes('câu hỏi') ||
+        lowerB.includes('đáp án') ||
+        lowerB.includes('dap an')
+      );
+    });
 
     // File-wide context auto-detection fallbacks
     let fileGrade: string | null = null;
@@ -572,7 +595,59 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
         } else if (isExplainLine) {
           explain = line.replace(/^(?:Lời giải|Loi giai|Giải thích|Giai thich|Hướng dẫn giải)\s*[:\.\s-]?/i, '').trim();
           for (let next = c + 1; next < lines.length; next++) {
-            explain += '\n' + lines[next];
+            const nextLine = lines[next].trim();
+            if (!nextLine) continue;
+
+            const isCh = /^(?:Chương|Chuong)\s*[:\.\s-]/i.test(nextLine);
+            const isLe = /^(?:Bài|Bai)\s*[:\.\s-]/i.test(nextLine);
+            const isGr = /^(?:Lớp|Lop|Khối|Khoi)\s*[:\.\s-]/i.test(nextLine);
+            const isSu = /^(?:Môn|Mon|Môn học|Mon hoc)\s*[:\.\s-]/i.test(nextLine);
+            const isOu = /^(?:Yêu cầu cần đạt|Yeu cau can dat|Yêu cầu|Yeu cau|Yccđ|Yccd)\s*[:\.\s-]/i.test(nextLine);
+            const isLv = /^(?:Mức độ nhận thức|Muc do nhan thuc|Mức độ|Muc do|Level)\s*[:\.\s-]/i.test(nextLine);
+            const isTy = /^(?:Dạng|Dang|Type)\s*[:\.\s-]/i.test(nextLine);
+            const isAns = /^(?:Đáp án|Dap an|Key)\s*[:\.\s-]/i.test(nextLine);
+
+            if (isCh) {
+              blockChapterName = nextLine.replace(/^(?:Chương|Chuong)\s*[:\.\s-]?/i, '').trim();
+            } else if (isLe) {
+              blockLessonName = nextLine.replace(/^(?:Bài|Bai)\s*[:\.\s-]?/i, '').trim();
+            } else if (isGr) {
+              const val = nextLine.replace(/^(?:Lớp|Lop|Khối|Khoi)\s*[:\.\s-]?/i, '').trim();
+              const numMatch = val.match(/\d+/);
+              if (numMatch) {
+                blockGrade = numMatch[0];
+                fileGrade = blockGrade || fileGrade;
+              }
+            } else if (isSu) {
+              const val = nextLine.replace(/^(?:Môn|Mon|Môn học|Mon hoc)\s*[:\.\s-]?/i, '').trim();
+              if (val.toLowerCase().includes('toán') || val.toLowerCase().includes('toan')) blockSubject = 'Toán';
+              else if (val.toLowerCase().includes('tin') || val.toLowerCase().includes('tin học')) blockSubject = 'Tin học';
+              else if (val.toLowerCase().includes('vật lý') || val.toLowerCase().includes('ly')) blockSubject = 'Vật lý';
+              fileSubject = blockSubject || fileSubject;
+            } else if (isOu) {
+              blockOutcomeText = nextLine.replace(/^(?:Yêu cầu cần đạt|Yeu cau can dat|Yêu cầu|Yeu cau|Yccđ|Yccd)\s*[:\.\s-]?/i, '').trim();
+            } else if (isLv) {
+              const value = nextLine.replace(/^(?:Mức độ nhận thức|Muc do nhan thuc|Mức độ|Muc do|Level)\s*[:\.\s-]?/i, '').trim();
+              if (value.includes('Nhận biết') || value.includes('Nhan biet')) level = 'Nhận biết';
+              else if (value.includes('Thông hiểu') || value.includes('Thong hieu')) level = 'Thông hiểu';
+              else if (value.includes('Vận dụng cao') || value.includes('Van dung cao')) level = 'Vận dụng cao';
+              else if (value.includes('Vận dụng') || value.includes('Van dung')) level = 'Vận dụng';
+            } else if (isTy) {
+              const value = nextLine.replace(/^(?:Dạng|Dang|Type)\s*[:\.\s-]?/i, '').trim().toUpperCase();
+              if (value.includes('MCQ')) {
+                type = 'MCQ';
+              } else if (value.includes('TF') || value.includes('ĐÚNG') || value.includes('YESNO') || value.includes('ĐÚNG/SAI')) {
+                type = 'YESNO';
+              } else if (value.includes('SHORT') || value.includes('NGẮN')) {
+                type = 'SHORT';
+              } else if (value.includes('ESSAY') || value.includes('TỰ LUẬN')) {
+                type = 'ESSAY';
+              }
+            } else if (isAns) {
+              answer = nextLine.replace(/^(?:Đáp án|Dap an|Key)\s*[:\.\s-]?/i, '').trim();
+            } else {
+              explain += '\n' + nextLine;
+            }
           }
           break;
         } else if (isQuestion) {
@@ -585,6 +660,27 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
 
       const cleanContent = contentLines.join('\n').trim();
       if (!cleanContent) continue;
+
+      // Automatically deduce type if defaulted to MCQ but has no options (A, B, C, D)
+      if (type === 'MCQ' && options.length === 0) {
+        const lowerC = cleanContent.toLowerCase();
+        const isEssayMatch = 
+          lowerC.includes('giải thích') || 
+          lowerC.includes('nêu') || 
+          lowerC.includes('vì sao') || 
+          lowerC.includes('chứng minh') || 
+          lowerC.includes('trình bày') || 
+          lowerC.includes('định nghĩa') || 
+          lowerC.includes('viết ba nghiệm') || 
+          lowerC.includes('nghiệm tổng quát') ||
+          answer.length > 8;
+
+        if (isEssayMatch) {
+          type = 'ESSAY';
+        } else {
+          type = 'SHORT';
+        }
+      }
 
       // Normalize MCQ Answer Letters
       if (type === 'MCQ') {
@@ -616,6 +712,13 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
       const activeSyl = syllabus.find(
         (sy) => sy.grade === resolvedGrade && sy.subject.toLowerCase() === resolvedSubject.toLowerCase()
       );
+
+      if (activeSyl && activeSyl.chapters.length > 0) {
+        resolvedChapterId = activeSyl.chapters[0].id;
+        if (activeSyl.chapters[0].lessons && activeSyl.chapters[0].lessons.length > 0) {
+          resolvedLessonId = activeSyl.chapters[0].lessons[0].id;
+        }
+      }
 
       const targetChapterText = blockChapterName || fileChapterText;
       const targetLessonText = blockLessonName || fileLessonText;
@@ -703,7 +806,7 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
   };
 
   const handleFileUploadProcess = (file: File) => {
-    if (!file.name.endsWith('.txt')) {
+    if (!file.name.toLowerCase().endsWith('.txt')) {
       alert('Chỉ hỗ trợ nhập tệp văn bản thô định dạng đuôi .TXT chuẩn!');
       return;
     }
@@ -770,8 +873,9 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
     return { chapterTitle, lessonTitle };
   };
 
-  const handleBulkImportSubmit = () => {
-    if (selectedImportIndices.length === 0) {
+  const handleBulkImportSubmit = (indicesToSubmit?: number[]) => {
+    const indices = indicesToSubmit || selectedImportIndices;
+    if (indices.length === 0) {
       alert('Vui lòng tích chọn câu hỏi muốn đưa vào kho lưu trữ!');
       return;
     }
@@ -779,7 +883,7 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
     const { chapterTitle, lessonTitle } = getSelectedSyllabusTitles();
 
     const batchToAdd: Omit<Question, 'id' | 'source' | 'status'>[] = [];
-    selectedImportIndices.forEach((idx) => {
+    indices.forEach((idx) => {
       const q = importedQuestions[idx];
       
       const finalGrade = importAssignGrade === 'AUTO' ? q.grade : importAssignGrade;
@@ -1753,11 +1857,8 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
                             alert('Vui lòng tích chọn câu hỏi muốn đưa vào kho lưu trữ!');
                             return;
                           }
-                          // Override selectedImportIndices to match filtered ones before submit
-                          setSelectedImportIndices(finalIndexesToSubmit);
-                          setTimeout(() => {
-                            handleBulkImportSubmit();
-                          }, 50);
+                          // Call with direct parameters to bypass any state updates delay
+                          handleBulkImportSubmit(finalIndexesToSubmit);
                         }}
                         className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-1 cursor-pointer border-none"
                       >
@@ -1870,6 +1971,44 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
                 <Library className="w-4 h-4 text-white" />
                 Xem kho câu hỏi
               </button>
+
+              {filteredQuestions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const seen = new Set<string>();
+                    const duplicateIds: string[] = [];
+                    filteredQuestions.forEach((q) => {
+                      const cleaned = q.content.trim().toLowerCase().replace(/\s+/g, '');
+                      if (seen.has(cleaned)) {
+                        duplicateIds.push(q.id);
+                      } else {
+                        seen.add(cleaned);
+                      }
+                    });
+                    if (duplicateIds.length === 0) {
+                      if (showToast) {
+                        showToast("Không tìm thấy câu hỏi trùng lặp nào với bộ lọc hiện tại.", "info");
+                      } else {
+                        alert("Không tìm thấy câu hỏi trùng lặp nào với bộ lọc hiện tại.");
+                      }
+                    } else {
+                      const label = `${filterSub !== 'ALL' ? filterSub : ''} Lớp ${filterGrade !== 'ALL' ? filterGrade : 'Tất cả'}`;
+                      if (window.confirm(`Tìm thấy ${duplicateIds.length} câu hỏi trùng lặp trong danh sách lọc (${label}). Bạn có muốn xóa chúng không?`)) {
+                        onDeleteQuestion(duplicateIds);
+                        if (showToast) {
+                          showToast(`Đã lọc trùng thành công! Đã dọn sạch ${duplicateIds.length} câu hỏi trùng lặp khỏi danh sách lọc.`, "success");
+                        }
+                      }
+                    }
+                  }}
+                  className="px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 font-extrabold text-xs rounded-xl shadow-xs border border-amber-200 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  title="Tìm và xóa các câu hỏi trùng lặp dựa trên bộ lọc hiện tại"
+                >
+                  <Copy className="w-4 h-4 text-amber-600" />
+                  Lọc trùng ({filteredQuestions.length})
+                </button>
+              )}
 
               <div className="relative w-full sm:w-64">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -2179,29 +2318,80 @@ Vậy số học sinh đi dã ngoại là 360 học sinh.
                     </div>
 
                     {activeExplorerQs.length > 0 && (
-                      <button
-                        onClick={() => {
-                          // Close explorer and apply these exact filters in the main view!
-                          if (selectedNode) {
-                            setFilterSub(explorerSub);
-                            setFilterGrade(explorerGrade);
-                            if (selectedNode.chapterId === 'ch-unassigned') {
-                              setFilterChapterId('ch-general');
-                              setFilterLessonId('le-general');
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const seen = new Set<string>();
+                            const duplicateIds: string[] = [];
+                            activeExplorerQs.forEach((q) => {
+                              const cleaned = q.content.trim().toLowerCase().replace(/\s+/g, '');
+                              if (seen.has(cleaned)) {
+                                duplicateIds.push(q.id);
+                              } else {
+                                seen.add(cleaned);
+                              }
+                            });
+                            if (duplicateIds.length === 0) {
+                              if (showToast) {
+                                showToast("Tuyệt vời! Không tìm thấy câu hỏi trùng lặp nào trong phần này.", "info");
+                              } else {
+                                alert("Tuyệt vời! Không tìm thấy câu hỏi trùng lặp nào trong phần này.");
+                              }
                             } else {
-                              setFilterChapterId(selectedNode.chapterId);
-                              setFilterLessonId(selectedNode.lessonId);
+                              if (window.confirm(`Tìm thấy ${duplicateIds.length} câu hỏi trùng lặp trong mục này. Bạn có muốn xóa chúng và giữ lại một bản duy nhất?`)) {
+                                onDeleteQuestion(duplicateIds);
+                                if (showToast) {
+                                  showToast(`Đã lọc trùng thành công! Đã loại bỏ ${duplicateIds.length} câu hỏi lặp khỏi mục này.`, "success");
+                                }
+                              }
                             }
-                          } else {
-                            setFilterSub(explorerSub);
-                            setFilterGrade(explorerGrade);
-                          }
-                          setIsExplorerOpen(false);
-                        }}
-                        className="p-1 px-2.5 bg-indigo-50 text-indigo-750 border border-indigo-150 hover:bg-indigo-100 font-extrabold text-[10px] rounded-lg cursor-pointer transition-all flex items-center gap-1"
-                      >
-                        Lọc ngoài chính ➜
-                      </button>
+                          }}
+                          className="p-1 px-2.5 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-extrabold text-[10px] rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
+                          title="Lọc và xóa các câu hỏi trùng lặp trong mục này"
+                        >
+                          <Copy className="w-3 h-3 text-amber-600" />
+                          Lọc trùng ({activeExplorerQs.length})
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ids = activeExplorerQs.map(q => q.id);
+                            onDeleteQuestion(ids);
+                          }}
+                          className="p-1 px-2.5 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-extrabold text-[10px] rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
+                          title="Xóa tất cả câu hỏi của bài này"
+                        >
+                          <Trash className="w-3 h-3 text-rose-600" />
+                          Xoá hết ({activeExplorerQs.length})
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Close explorer and apply these exact filters in the main view!
+                            if (selectedNode) {
+                              setFilterSub(explorerSub);
+                              setFilterGrade(explorerGrade);
+                              if (selectedNode.chapterId === 'ch-unassigned') {
+                                setFilterChapterId('ch-general');
+                                setFilterLessonId('le-general');
+                              } else {
+                                setFilterChapterId(selectedNode.chapterId);
+                                setFilterLessonId(selectedNode.lessonId);
+                              }
+                            } else {
+                              setFilterSub(explorerSub);
+                              setFilterGrade(explorerGrade);
+                            }
+                            setIsExplorerOpen(false);
+                          }}
+                          className="p-1 px-2.5 bg-indigo-50 text-indigo-750 border border-indigo-150 hover:bg-indigo-100 font-extrabold text-[10px] rounded-lg cursor-pointer transition-all flex items-center gap-1"
+                        >
+                          Lọc ngoài chính ➜
+                        </button>
+                      </div>
                     )}
                   </div>
 

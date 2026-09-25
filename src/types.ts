@@ -102,6 +102,7 @@ export interface Assignment {
   shuffleOptions: boolean;
   showSolution: boolean;
   allowRetry: boolean;
+  maxAttempts?: number; // 1, 2, 3, or 999 (unlimited)
   message: string;
   status: 'Đang làm' | 'Đã đóng';
 }
@@ -135,6 +136,8 @@ export interface TeacherAccount {
   department?: string;
   subject?: string;
   school?: string;
+  status?: 'active' | 'suspended';
+  campus?: string;
 }
 
 export interface GlobalState {

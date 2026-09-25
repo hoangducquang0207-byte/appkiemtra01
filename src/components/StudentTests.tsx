@@ -42,6 +42,31 @@ import {
   Check,
 } from 'lucide-react';
 
+export function cleanOptionPrefix(opt: string, index: number, type: string): string {
+  if (!opt) return '';
+  const trimmed = opt.trim();
+  
+  if (type === 'MCQ') {
+    const letters = ['A', 'B', 'C', 'D'];
+    const currentLetter = letters[index];
+    const regex = new RegExp(`^[a-d${currentLetter}]\\s*[\\.\\/\\)\\:-]\\s*`, 'i');
+    if (regex.test(trimmed)) {
+      return trimmed.replace(regex, '').trim();
+    }
+  }
+  
+  if (type === 'YESNO') {
+    const letters = ['a', 'b', 'c', 'd'];
+    const currentLetter = letters[index];
+    const regex = new RegExp(`^[a-d${currentLetter}]\\s*[\\.\\/\\)\\:-]\\s*`, 'i');
+    if (regex.test(trimmed)) {
+      return trimmed.replace(regex, '').trim();
+    }
+  }
+  
+  return trimmed;
+}
+
 interface StudentTestsProps {
   classes: Class[];
   assignments: Assignment[];
@@ -287,7 +312,15 @@ export default function StudentTests({
       const qType = getQuestionActiveType(q);
 
       if (qType === 'MCQ') {
-        if (String(studentAns || '').trim() === q.answer.trim()) {
+        const normalizeMcqAnswer = (ans: any): string => {
+          const clean = String(ans || '').trim().toUpperCase();
+          if (clean === '0' || clean === 'A') return 'A';
+          if (clean === '1' || clean === 'B') return 'B';
+          if (clean === '2' || clean === 'C') return 'C';
+          if (clean === '3' || clean === 'D') return 'D';
+          return clean;
+        };
+        if (normalizeMcqAnswer(studentAns) === normalizeMcqAnswer(q.answer)) {
           totalScore += pointPerQ;
         }
       } else if (qType === 'YESNO') {
@@ -464,7 +497,7 @@ export default function StudentTests({
                                   : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-850/50'
                               }`}
                             >
-                              <span className="font-bold mr-1">{['A', 'B', 'C', 'D'][oIdx]}.</span> <MathText text={opt} />
+                              <span className="font-bold mr-1">{['A', 'B', 'C', 'D'][oIdx]}.</span> <MathText text={cleanOptionPrefix(opt, oIdx, 'MCQ')} />
                             </button>
                           );
                         })}
@@ -486,7 +519,7 @@ export default function StudentTests({
                               >
                                 <span className="text-slate-400 max-w-lg leading-relaxed flex items-center gap-1.5">
                                   <span className="font-bold text-slate-300">{['a', 'b', 'c', 'd'][oIdx]})</span>{' '}
-                                  <MathText text={opt} />
+                                  <MathText text={cleanOptionPrefix(opt, oIdx, 'YESNO')} />
                                 </span>
 
                                 <div className="flex gap-2">
@@ -744,7 +777,11 @@ export default function StudentTests({
                           )}
                         </div>
                       ) : (
-                        String(studAns || 'Chưa thực hiện trả lời')
+                        qActiveType === 'MCQ' && studAns !== undefined && studAns !== '' ? (
+                          ['A', 'B', 'C', 'D'][parseInt(String(studAns))] || String(studAns)
+                        ) : (
+                          String(studAns || 'Chưa thực hiện trả lời')
+                        )
                       )}
                     </div>
 
@@ -1101,6 +1138,7 @@ export default function StudentTests({
       shuffleOptions: false,
       showSolution: true,
       allowRetry: true,
+      maxAttempts: 999,
       message: 'Học tập tự do củng cố và lấp đầy lỗ hổng kiến thức.',
       status: 'Đang làm',
     };
@@ -1390,9 +1428,14 @@ export default function StudentTests({
                 const exam = exams.find((e) => e.id === as.examId);
                 if (!exam) return null;
 
-                const submission = submissions.find(
+                const studentSubmissions = submissions.filter(
                   (s) => s.assignmentId === as.id && (s.studentId === resolvedStudentId || s.studentName === profile.studentName)
                 );
+                const sortedAttempts = [...studentSubmissions].sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+                const latestSubmission = sortedAttempts[sortedAttempts.length - 1];
+                const attemptCount = sortedAttempts.length;
+                const maxAttempts = as.maxAttempts !== undefined ? as.maxAttempts : (as.allowRetry ? 999 : 1);
+                const hasReachedMax = attemptCount >= maxAttempts;
 
                 const isToan = exam.subject.toLowerCase().includes('toán');
 
@@ -1402,7 +1445,7 @@ export default function StudentTests({
                     layout
                     whileHover={{ y: -3 }}
                     className={`bg-white rounded-2xl border p-5 shadow-xs flex flex-col justify-between space-y-4 transition-all duration-200 ${
-                      submission 
+                      hasReachedMax 
                         ? 'border-slate-100 bg-slate-50/20' 
                         : isToan 
                         ? 'border-emerald-100 hover:border-emerald-300 shadow-emerald-50/10' 
@@ -1419,6 +1462,9 @@ export default function StudentTests({
                         </span>
                         <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-bold">
                           {exam.questions.length} câu
+                        </span>
+                        <span className="text-[9px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md font-bold">
+                          Đã làm: {attemptCount}/{maxAttempts === 999 ? '∞' : maxAttempts} lần
                         </span>
                       </div>
                       
@@ -1445,24 +1491,63 @@ export default function StudentTests({
 
                     {/* Interaction Button Section */}
                     <div className="pt-2 border-t border-slate-50">
-                      {submission ? (
-                        <div className="bg-emerald-50/40 border border-emerald-100 p-3 rounded-xl flex items-center justify-between">
-                          <div>
-                            <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Kết quả luyện tập</span>
-                            <strong className="text-emerald-700 text-sm font-black font-mono flex items-center gap-1">
-                              <CheckCircle className="w-4 h-4 text-emerald-500" />
-                              {submission.score.toFixed(1)} / 10 điểm
-                            </strong>
+                      {attemptCount > 0 ? (
+                        <div className="space-y-2">
+                          <div className="bg-emerald-50/45 border border-emerald-100 p-2.5 rounded-xl flex items-center justify-between flex-wrap gap-2">
+                            <div>
+                              <span className="text-[8.5px] text-slate-400 uppercase font-black tracking-wider block">Kết quả gần nhất</span>
+                              <strong className="text-emerald-700 text-xs font-black font-mono flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                                {latestSubmission?.score !== undefined ? latestSubmission.score.toFixed(1) : '0.0'} / 10 điểm
+                              </strong>
+                            </div>
+                            
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="text-[9px] text-slate-400 font-bold mr-1">Xem chi tiết:</span>
+                              {sortedAttempts.map((sub, i) => (
+                                <button
+                                  type="button"
+                                  key={sub.id}
+                                  onClick={() => {
+                                    soundManager.playClick();
+                                    setPreviewSubId(sub.id);
+                                  }}
+                                  className="px-2 py-1 bg-white text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-[10px] font-extrabold rounded-md border border-slate-200 transition-all cursor-pointer"
+                                >
+                                  Lần {i + 1}: {sub.score.toFixed(1)}đ
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                          <button
-                            onClick={() => {
-                              soundManager.playClick();
-                              setPreviewSubId(submission.id);
-                            }}
-                            className="px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-black rounded-lg cursor-pointer transition-colors uppercase tracking-widest"
-                          >
-                            Xem bài làm chi tiết
-                          </button>
+
+                          {as.status !== 'Đã đóng' && !hasReachedMax && (
+                            <button
+                              onClick={() => {
+                                soundManager.playSuccess();
+                                handleStartExam(as, exam);
+                              }}
+                              className={`w-full py-2 text-white text-[10px] font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer uppercase tracking-wider ${
+                                isToan 
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/10' 
+                                  : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/10'
+                              }`}
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              Làm lại bài thi (Còn {maxAttempts - attemptCount} lượt)
+                            </button>
+                          )}
+
+                          {as.status === 'Đã đóng' && (
+                            <div className="p-2 bg-rose-50 border border-rose-100 text-rose-700 text-[9.5px] font-bold rounded-xl text-center">
+                              ⚠️ Bài rèn luyện đã khóa. Không thể thực hiện làm lại.
+                            </div>
+                          )}
+
+                          {as.status !== 'Đã đóng' && hasReachedMax && (
+                            <div className="p-2 bg-slate-100 border border-slate-200 text-slate-500 text-[9.5px] font-bold rounded-xl text-center">
+                              🔒 Bạn đã hoàn thành tối đa {maxAttempts} lượt làm bài cho phép.
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div>

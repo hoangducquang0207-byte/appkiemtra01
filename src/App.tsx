@@ -20,7 +20,6 @@ import ClassesConfig from './components/ClassesConfig';
 import SyllabusConfig from './components/SyllabusConfig';
 import CreateExamPanel from './components/CreateExamPanel';
 import QuestionBank from './components/QuestionBank';
-import InformaticsQuestionBank from './components/InformaticsQuestionBank';
 import ExamBank from './components/ExamBank';
 import AssignPanel from './components/AssignPanel';
 import EssayGrading from './components/EssayGrading';
@@ -176,12 +175,70 @@ export default function App() {
       const data = localStorage.getItem(APP_ID);
       if (data) {
         const parsed = JSON.parse(data);
+        
+        // 1. Load syllabus and merge any missing "Tin học" syllabus for grades 6, 7, 8, 9
+        let currentSyllabus = parsed.syllabus || [];
+        const infGrades = ['6', '7', '8', '9'];
+        let hasSyllabusUpdates = false;
+
+        infGrades.forEach(g => {
+          const hasInformatics = currentSyllabus.some((s: any) => s.grade === g && s.subject === 'Tin học');
+          if (!hasInformatics) {
+            const defaultInfSyllabus = DEFAULT_SYLLABUS.find(s => s.grade === g && s.subject === 'Tin học');
+            if (defaultInfSyllabus) {
+              currentSyllabus.push(defaultInfSyllabus);
+              hasSyllabusUpdates = true;
+            }
+          }
+        });
+
+        // If grade 8 Informatics syllabus exists but is outdated, replace it with the new detailed one
+        const grade8InfIndex = currentSyllabus.findIndex((s: any) => s.grade === '8' && s.subject === 'Tin học');
+        if (grade8InfIndex !== -1) {
+          const sy8 = currentSyllabus[grade8InfIndex];
+          const isOutdated = sy8.chapters.some((ch: any) => ch.id === 'ch-03' || ch.id === 'ch-04');
+          if (isOutdated) {
+            const defaultInfSyllabus = DEFAULT_SYLLABUS.find(s => s.grade === '8' && s.subject === 'Tin học');
+            if (defaultInfSyllabus) {
+              currentSyllabus[grade8InfIndex] = defaultInfSyllabus;
+              hasSyllabusUpdates = true;
+            }
+          }
+        }
+
+        // 2. Load questions and merge any missing default Informatics questions
+        let currentQuestions = parsed.questions || [];
+        let hasQuestionUpdates = false;
+        
+        DEFAULT_QUESTIONS.forEach(dq => {
+          if (dq.subject === 'Tin học') {
+            const exists = currentQuestions.some((q: any) => q.content.trim().toLowerCase() === dq.content.trim().toLowerCase());
+            if (!exists) {
+              currentQuestions.push(dq);
+              hasQuestionUpdates = true;
+            }
+          }
+        });
+
+        // Map outdated q-05 and q-06 to the new syllabus chapters if they exist in user's bank
+        currentQuestions = currentQuestions.map((q: any) => {
+          if (q.id === 'q-05' && q.chapterId === 'ch-03') {
+            hasQuestionUpdates = true;
+            return { ...q, chapterId: 'inf-ch1-8', lessonId: 'inf-le1-8', topic: 'Chủ đề 1. Máy tính và cộng đồng - Bài 1. Lược sử công cụ tính toán' };
+          }
+          if (q.id === 'q-06' && q.chapterId === 'ch-03') {
+            hasQuestionUpdates = true;
+            return { ...q, chapterId: 'inf-ch2-8', lessonId: 'inf-le2-8', topic: 'Chủ đề 2. Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin - Bài 2. Thông tin trong môi trường số' };
+          }
+          return q;
+        });
+
         setClasses(parsed.classes || []);
-        setQuestions(parsed.questions || []);
+        setQuestions(currentQuestions);
         setExams(parsed.exams || []);
         setAssignments(parsed.assignments || []);
         setSubmissions(parsed.submissions || []);
-        setSyllabus(parsed.syllabus || []);
+        setSyllabus(currentSyllabus);
         
         let loadedTeachers = parsed.teachers || [
           {
@@ -210,8 +267,16 @@ export default function App() {
             subject: 'Khoa học tự nhiên',
             school: 'Trường THCS Nguyễn Du'
           });
-          // Immediately save to make sure it's persisted
-          const updatedPayload = { ...parsed, teachers: loadedTeachers };
+          hasSyllabusUpdates = true;
+        }
+
+        if (hasSyllabusUpdates || hasQuestionUpdates) {
+          const updatedPayload = {
+            ...parsed,
+            syllabus: currentSyllabus,
+            questions: currentQuestions,
+            teachers: loadedTeachers
+          };
           localStorage.setItem(APP_ID, JSON.stringify(updatedPayload));
         }
         
@@ -226,7 +291,82 @@ export default function App() {
     }
   }, []);
 
-  // Sync state to local storage helper
+  // Synchronize state with central Server database on startup
+  useEffect(() => {
+    const fetchCentralDatabase = async () => {
+      try {
+        const res = await fetch('/api/sync-state');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.success && data.db) {
+          const db = data.db;
+          
+          // If the server database is empty, push our current data to populate it!
+          if (!db.teachers || db.teachers.length === 0) {
+            const existing = localStorage.getItem(APP_ID);
+            const parsed = existing ? JSON.parse(existing) : null;
+            if (parsed) {
+              await fetch('/api/sync-state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(parsed)
+              });
+            }
+            return;
+          }
+
+          // Otherwise, overwrite local states with the centralized server database!
+          if (db.teachers && db.teachers.length > 0) {
+            setTeachers(db.teachers);
+          }
+          if (db.classes && db.classes.length > 0) {
+            setClasses(db.classes);
+          }
+          if (db.questions && db.questions.length > 0) {
+            setQuestions(db.questions);
+          }
+          if (db.exams && db.exams.length > 0) {
+            setExams(db.exams);
+          }
+          if (db.assignments && db.assignments.length > 0) {
+            setAssignments(db.assignments);
+          }
+          if (db.submissions && db.submissions.length > 0) {
+            setSubmissions(db.submissions);
+          }
+          if (db.syllabus && db.syllabus.length > 0) {
+            setSyllabus(db.syllabus);
+          }
+
+          // Sync back to local storage
+          const existing = localStorage.getItem(APP_ID);
+          const parsed = existing ? JSON.parse(existing) : {};
+          const mergedPayload = {
+            ...parsed,
+            teachers: db.teachers || parsed.teachers || [],
+            classes: db.classes || parsed.classes || [],
+            questions: db.questions || parsed.questions || [],
+            exams: db.exams || parsed.exams || [],
+            assignments: db.assignments || parsed.assignments || [],
+            submissions: db.submissions || parsed.submissions || [],
+            syllabus: db.syllabus || parsed.syllabus || [],
+          };
+          localStorage.setItem(APP_ID, JSON.stringify(mergedPayload));
+        }
+      } catch (err) {
+        console.warn('Could not sync with central database on startup:', err);
+      }
+    };
+
+    // Run sync after a brief delay so state has initialized from localStorage
+    const timer = setTimeout(() => {
+      fetchCentralDatabase();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Sync state to local storage helper and central backend
   const syncToLocalStorage = (updatedState: Partial<GlobalState>) => {
     try {
       const existing = localStorage.getItem(APP_ID);
@@ -242,6 +382,14 @@ export default function App() {
         settings: updatedState.settings !== undefined ? updatedState.settings : parsed.settings || settings,
       };
       localStorage.setItem(APP_ID, JSON.stringify(payload));
+
+      // Also sync to central server database asynchronously
+      fetch('/api/sync-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(err => console.warn('Server sync failed:', err));
+
     } catch (err) {
       console.error('Error saving state:', err);
     }
@@ -444,10 +592,18 @@ export default function App() {
     if (!target) return;
     triggerConfirm('Xóa lớp học', `Bạn có chắc muốn xóa lớp "${target.name}"? Mọi dữ liệu sẽ mất vĩnh viễn.`, () => {
       const updatedClasses = classes.filter((c) => c.id !== id);
+      const deletedAssignIds = new Set(assignments.filter((a) => a.classId === id).map((a) => a.id));
       const updatedAssigns = assignments.filter((a) => a.classId !== id);
+      const updatedSubmissions = submissions.filter((sub) => !deletedAssignIds.has(sub.assignmentId));
+      
       setClasses(updatedClasses);
       setAssignments(updatedAssigns);
-      syncToLocalStorage({ classes: updatedClasses, assignments: updatedAssigns });
+      setSubmissions(updatedSubmissions);
+      syncToLocalStorage({ 
+        classes: updatedClasses, 
+        assignments: updatedAssigns, 
+        submissions: updatedSubmissions 
+      });
       showToast(`Đã xóa thành công lớp "${target.name}".`);
     });
   };
@@ -552,7 +708,15 @@ export default function App() {
         return c;
       });
       setClasses(updated);
-      syncToLocalStorage({ classes: updated });
+
+      // Cascade delete submissions for this student in this class's assignments
+      const classAssignments = assignments.filter((a) => a.classId === classId).map((a) => a.id);
+      const updatedSubmissions = submissions.filter(
+        (sub) => !(sub.studentId === studentId && classAssignments.includes(sub.assignmentId))
+      );
+      setSubmissions(updatedSubmissions);
+
+      syncToLocalStorage({ classes: updated, submissions: updatedSubmissions });
       showToast('Đã loại bỏ học viên.');
     });
   };
@@ -569,7 +733,15 @@ export default function App() {
         return c;
       });
       setClasses(updated);
-      syncToLocalStorage({ classes: updated });
+
+      // Cascade delete all submissions for assignments in this class
+      const classAssignments = assignments.filter((a) => a.classId === classId).map((a) => a.id);
+      const updatedSubmissions = submissions.filter(
+        (sub) => !classAssignments.includes(sub.assignmentId)
+      );
+      setSubmissions(updatedSubmissions);
+
+      syncToLocalStorage({ classes: updated, submissions: updatedSubmissions });
       showToast('Đã xóa sạch toàn bộ học sinh trong lớp.');
     });
   };
@@ -586,17 +758,48 @@ export default function App() {
         return c;
       });
       setClasses(updated);
-      syncToLocalStorage({ classes: updated });
+
+      // Cascade delete submissions for deleted students in this class
+      const classAssignments = assignments.filter((a) => a.classId === classId).map((a) => a.id);
+      const updatedSubmissions = submissions.filter(
+        (sub) => !(studentIds.includes(sub.studentId) && classAssignments.includes(sub.assignmentId))
+      );
+      setSubmissions(updatedSubmissions);
+
+      syncToLocalStorage({ classes: updated, submissions: updatedSubmissions });
       showToast(`Đã xóa hàng loạt thành công ${studentIds.length} học sinh.`);
     });
   };
 
   // SYLLABUS HANDLERS
   const handleDeleteFullSyllabus = (id: string) => {
+    const target = syllabus.find((s) => s.id === id);
+    if (!target) return;
     triggerConfirm('Xóa phân phối', 'Bạn chắc chắn muốn xóa toàn bộ phân phối này?', () => {
       const updated = syllabus.filter((s) => s.id !== id);
       setSyllabus(updated);
-      syncToLocalStorage({ syllabus: updated });
+
+      // Collect all chapter and lesson IDs
+      const chapterIds = new Set(target.chapters.map((ch) => ch.id));
+      const lessonIds = new Set(target.chapters.flatMap((ch) => ch.lessons.map((le) => le.id)));
+
+      // Remove linkages in questions
+      const updatedQuestions = questions.map((q) => {
+        let changed = false;
+        let newQ = { ...q };
+        if (chapterIds.has(q.chapterId)) {
+          newQ.chapterId = '';
+          changed = true;
+        }
+        if (lessonIds.has(q.lessonId)) {
+          newQ.lessonId = '';
+          changed = true;
+        }
+        return changed ? newQ : q;
+      });
+      setQuestions(updatedQuestions);
+
+      syncToLocalStorage({ syllabus: updated, questions: updatedQuestions });
       showToast('Đã xóa phân phối.');
     });
   };
@@ -658,7 +861,17 @@ export default function App() {
       return sy;
     });
     setSyllabus(updated);
-    syncToLocalStorage({ syllabus: updated });
+
+    // Remove linkage from questions referencing this lessonId
+    const updatedQuestions = questions.map((q) => {
+      if (q.lessonId === lessonId) {
+        return { ...q, lessonId: '' };
+      }
+      return q;
+    });
+    setQuestions(updatedQuestions);
+
+    syncToLocalStorage({ syllabus: updated, questions: updatedQuestions });
     showToast('Đã xóa bài học.');
   };
 
@@ -733,12 +946,27 @@ export default function App() {
     }
   };
 
-  const handleDeleteQuestion = (id: string) => {
-    triggerConfirm('Xóa câu hỏi', 'Xóa vĩnh viễn câu hỏi rèn luyện này?', () => {
-      const updated = questions.filter((q) => q.id !== id);
+  const handleDeleteQuestion = (idOrIds: string | string[]) => {
+    const isBulk = Array.isArray(idOrIds);
+    const title = isBulk ? 'Xóa nhiều câu hỏi' : 'Xóa câu hỏi';
+    const message = isBulk 
+      ? `Xóa vĩnh viễn ${idOrIds.length} câu hỏi đang chọn lọc này?` 
+      : 'Xóa vĩnh viễn câu hỏi rèn luyện này?';
+
+    triggerConfirm(title, message, () => {
+      const idsToDelete = isBulk ? new Set(idOrIds) : new Set([idOrIds]);
+      const updated = questions.filter((q) => !idsToDelete.has(q.id));
       setQuestions(updated);
-      syncToLocalStorage({ questions: updated });
-      showToast('Đã loại bỏ thành công.');
+
+      // Remove deleted questions from exams that contain them
+      const updatedExams = exams.map((ex) => {
+        const remainingQs = ex.questions.filter((qId) => !idsToDelete.has(qId));
+        return { ...ex, questions: remainingQs };
+      });
+      setExams(updatedExams);
+
+      syncToLocalStorage({ questions: updated, exams: updatedExams });
+      showToast(isBulk ? `Đã loại bỏ thành công ${idOrIds.length} câu hỏi.` : 'Đã loại bỏ thành công.');
     });
   };
 
@@ -768,10 +996,19 @@ export default function App() {
   const handleDeleteExam = (id: string) => {
     triggerConfirm('Xóa đề thi', 'Xóa bỏ đề thi này khỏi kho lưu trữ?', () => {
       const updatedExams = exams.filter((e) => e.id !== id);
+      const deletedAssignIds = new Set(assignments.filter((a) => a.examId === id).map((a) => a.id));
       const updatedAssigns = assignments.filter((a) => a.examId !== id);
+      const updatedSubmissions = submissions.filter((sub) => !deletedAssignIds.has(sub.assignmentId));
+
       setExams(updatedExams);
       setAssignments(updatedAssigns);
-      syncToLocalStorage({ exams: updatedExams, assignments: updatedAssigns });
+      setSubmissions(updatedSubmissions);
+
+      syncToLocalStorage({ 
+        exams: updatedExams, 
+        assignments: updatedAssigns, 
+        submissions: updatedSubmissions 
+      });
       showToast('Đã loại bỏ đề kiểm tra.');
     });
   };
@@ -814,8 +1051,12 @@ export default function App() {
   const handleDeleteAssignment = (id: string) => {
     triggerConfirm('Xóa bài ôn tập', 'Xóa bài luyện tập này khỏi danh mục hoạt động?', () => {
       const updated = assignments.filter((a) => a.id !== id);
+      const updatedSubmissions = submissions.filter((sub) => sub.assignmentId !== id);
+      
       setAssignments(updated);
-      syncToLocalStorage({ assignments: updated });
+      setSubmissions(updatedSubmissions);
+      
+      syncToLocalStorage({ assignments: updated, submissions: updatedSubmissions });
       showToast('Đã hủy bỏ bài rèn luyện.');
     });
   };
@@ -838,6 +1079,7 @@ export default function App() {
       shuffleOptions: true,
       showSolution: true,
       allowRetry: true,
+      maxAttempts: 999,
       message: '[AI Phụ Đạo] Bài ôn tập được giao chuyên nâng cao bổ trợ lấp lỗ hổng kiến thức số học.',
     });
   };
@@ -941,35 +1183,15 @@ export default function App() {
   // Filter datasets based on active user role and owner association
   const isAdminOrSuper = authenticatedRoles.admin;
 
-  const displayClasses = isAdminOrSuper
-    ? classes
-    : classes.filter((c) => c.createdBy === currentUser.uid || !c.createdBy || currentUser.uid === 'gv-demo');
+  const displayClasses = classes;
 
-  const displayExams = isAdminOrSuper
-    ? exams
-    : exams.filter((e) => e.createdBy === currentUser.uid || !e.createdBy || e.createdBy === 'gv-demo');
+  const displayExams = exams;
 
-  const displayQuestions = isAdminOrSuper
-    ? questions
-    : questions.filter((q) => q.createdBy === currentUser.uid || q.source === 'Bộ Giáo dục' || !q.createdBy || currentUser.uid === 'gv-demo');
+  const displayQuestions = questions;
 
-  const displayAssignments = isAdminOrSuper
-    ? assignments
-    : assignments.filter((a) => {
-        const cls = classes.find((c) => c.id === a.classId);
-        const classOwner = cls?.createdBy;
-        return !classOwner || classOwner === currentUser.uid || currentUser.uid === 'gv-demo';
-      });
+  const displayAssignments = assignments;
 
-  const displaySubmissions = isAdminOrSuper
-    ? submissions
-    : submissions.filter((s) => {
-        const assign = assignments.find((a) => a.id === s.assignmentId);
-        if (!assign) return false;
-        const cls = classes.find((c) => c.id === assign.classId);
-        const classOwner = cls?.createdBy;
-        return !classOwner || classOwner === currentUser.uid || currentUser.uid === 'gv-demo';
-      });
+  const displaySubmissions = submissions;
 
   return (
     <div className={`flex min-h-screen flex-col overflow-hidden text-slate-800 ${settings.darkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50'}`}>
@@ -1050,12 +1272,17 @@ export default function App() {
                   );
 
                   if (foundTeacher) {
+                    if (foundTeacher.status === 'suspended') {
+                      showToast('Tài khoản Giáo viên này đã bị ngừng cung cấp dịch vụ! Vui lòng liên hệ Admin.', 'error');
+                      return;
+                    }
                     const profile = {
                       uid: foundTeacher.id,
                       name: foundTeacher.name,
                       email: foundTeacher.email,
                       phone: foundTeacher.phone || '',
                       school: foundTeacher.school || 'Trường THCS Nguyễn Du',
+                      campus: foundTeacher.campus || '',
                       academicTitle: 'Thạc sĩ',
                       department: foundTeacher.department || foundTeacher.subject || 'Khoa học tự nhiên',
                       bio: 'Giáo viên bộ môn Khoa học tự nhiên có hơn 10 năm kinh nghiệm.',
@@ -1197,7 +1424,7 @@ export default function App() {
       )}
 
       {/* Toast Render container */}
-      <div className="fixed top-5 right-5 z-55 flex flex-col gap-2 pointer-events-none">
+      <div className="fixed top-5 right-5 z-[110] flex flex-col gap-2 pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
@@ -1217,7 +1444,7 @@ export default function App() {
 
       {/* Confirmation modal */}
       {confirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 m-4 text-slate-800">
             <h3 className="text-lg font-bold text-slate-900">{confirmModal.title}</h3>
             <p className="text-sm text-slate-500 mt-2 font-medium">{confirmModal.message}</p>
@@ -1433,16 +1660,7 @@ export default function App() {
                       }`}
                     >
                       <Clipboard className="w-4 h-4" />
-                      <span>Kho câu hỏi Toán THCS</span>
-                    </button>
-                    <button
-                      onClick={() => navigateTo('inf-question-bank')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
-                        currentModule === 'inf-question-bank' ? 'text-emerald-400 bg-slate-800/80' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-850'
-                      }`}
-                    >
-                      <Layers className="w-4 h-4 text-emerald-400" />
-                      <span>Kho câu hỏi Tin học THCS</span>
+                      <span>Kho câu hỏi THCS</span>
                     </button>
                     <button
                       onClick={() => navigateTo('exam-bank')}
@@ -1626,6 +1844,7 @@ export default function App() {
                   setQuestions((prev) => [...prev, ...newQs]);
                   syncToLocalStorage({ questions: [...questions, ...newQs] });
                 }}
+                showToast={showToast}
               />
             )}
 
@@ -1636,16 +1855,7 @@ export default function App() {
                 onAddQuestion={handleAddQuestion}
                 onDeleteQuestion={handleDeleteQuestion}
                 onUpdateQuestion={handleUpdateQuestion}
-              />
-            )}
-
-            {currentModule === 'inf-question-bank' && (
-              <InformaticsQuestionBank
-                questions={displayQuestions}
-                syllabus={syllabus}
-                onAddQuestion={handleAddQuestion}
-                onDeleteQuestion={handleDeleteQuestion}
-                onUpdateQuestion={handleUpdateQuestion}
+                showToast={showToast}
               />
             )}
 

@@ -24,7 +24,7 @@ export default function AssignPanel({ exams, classes, assignments, onAssignSubmi
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [shuffleOptions, setShuffleOptions] = useState(true);
   const [showSolution, setShowSolution] = useState(true);
-  const [allowRetry, setAllowRetry] = useState(true);
+  const [maxAttempts, setMaxAttempts] = useState<number>(999); // 1, 2, 3, or 999 (multiple/unlimited)
   const [message, setMessage] = useState('');
 
   // Sync form defaults when exams or classes lists change
@@ -52,7 +52,8 @@ export default function AssignPanel({ exams, classes, assignments, onAssignSubmi
       shuffleQuestions,
       shuffleOptions,
       showSolution,
-      allowRetry,
+      allowRetry: maxAttempts > 1,
+      maxAttempts,
       message,
     });
 
@@ -142,15 +143,29 @@ export default function AssignPanel({ exams, classes, assignments, onAssignSubmi
                   />
                   <span>Bật xem kết quả giải chi tiết sau nộp</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allowRetry}
-                    onChange={(e) => setAllowRetry(e.target.checked)}
-                    className="rounded text-emerald-500"
-                  />
-                  <span>Học sinh được rèn luyện lại nhiều lần</span>
-                </label>
+                
+                <div className="space-y-1 pt-1">
+                  <span className="block text-slate-500 uppercase">Số lần làm bài tối đa</span>
+                  <div className="grid grid-cols-4 gap-1">
+                    {([1, 2, 3, 999] as number[]).map((val) => {
+                      const isSelected = maxAttempts === val;
+                      return (
+                        <button
+                          type="button"
+                          key={val}
+                          onClick={() => setMaxAttempts(val)}
+                          className={`py-1.5 text-[10px] font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-xs'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {val === 999 ? 'Nhiều lần' : `${val} lần`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -201,7 +216,10 @@ export default function AssignPanel({ exams, classes, assignments, onAssignSubmi
                     </div>
                     <p className="text-xs text-slate-400 mt-1 font-medium">
                       Lớp nhận đề: <strong className="text-slate-600">{cls.name}</strong> | Hạn chót:{' '}
-                      <strong className="text-slate-500">{as.deadline.replace('T', ' ')}</strong>
+                      <strong className="text-slate-500">{as.deadline.replace('T', ' ')}</strong> | Số lần làm:{' '}
+                      <strong className="text-slate-600">
+                        {as.maxAttempts === undefined || as.maxAttempts === 999 ? 'Nhiều lần' : `${as.maxAttempts} lần`}
+                      </strong>
                     </p>
                     {as.message && (
                       <p className="text-[11px] text-emerald-700 font-semibold italic mt-1.5 flex items-center gap-1 bg-white/60 p-1.5 rounded border border-emerald-50">

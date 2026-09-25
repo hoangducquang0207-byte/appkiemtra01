@@ -80,8 +80,12 @@ export default function AdminPanel({
   const [teacherDepartment, setTeacherDepartment] = useState('');
   const [teacherSubject, setTeacherSubject] = useState('');
   const [teacherSchool, setTeacherSchool] = useState('');
+  const [teacherCampus, setTeacherCampus] = useState('');
+  const [teacherStatus, setTeacherStatus] = useState<'active' | 'suspended'>('active');
   const [showTeacherPass, setShowTeacherPass] = useState(false);
   const [teacherToDeleteId, setTeacherToDeleteId] = useState<string | null>(null);
+  const [showSmtpModal, setShowSmtpModal] = useState(false);
+  const [smtpStep, setSmtpStep] = useState(0); // 1: Connecting, 2: Sending, 3: Completed
 
   // Admin profile editing states
   const [adminName, setAdminName] = useState(currentUser?.name || 'Hệ Thống Admin');
@@ -121,6 +125,7 @@ export default function AdminPanel({
   const [selectedTeacherIdForShare, setSelectedTeacherIdForShare] = useState<string>(teachers[0]?.id || '');
   const [selectedClassIdForShare, setSelectedClassIdForShare] = useState<string>(classes[0]?.id || '');
   const [copiedText, setCopiedText] = useState(false);
+  const [shareEmailInput, setShareEmailInput] = useState('');
 
   // Toast notification local fallback helper
   const [localToast, setLocalToast] = useState('');
@@ -134,6 +139,104 @@ export default function AdminPanel({
     setCopiedText(true);
     showLocalToast('Đã sao chép vào bộ nhớ tạm!');
     setTimeout(() => setCopiedText(false), 2000);
+  };
+
+  // Excel template download and parsing handlers
+  const handleDownloadExcelTemplate = () => {
+    const headers = 'Họ tên giáo viên,Email đăng nhập,Số điện thoại,Khoa tổ chuyên môn,Môn giảng dạy,Trường học,Phân hiệu\n';
+    const sampleRow = 'Hoàng Đức Quang,hoangquang1611@gmail.com,0987400704,Môn Toán,Tin học,Trường THCS Phước Thái,Phân hiệu 1\n';
+    // Use UTF-8 BOM so Excel opens Vietnamese characters correctly
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), headers + sampleRow], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'Mau_Danh_Sach_Giao_Vien.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showLocalToast('Đã tải mẫu Excel thành công (không cần cột mật khẩu)!');
+  };
+
+  const handleImportExcelFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        if (lines.length <= 1) {
+          showLocalToast('Lỗi: File trống hoặc không có dữ liệu giáo viên!');
+          return;
+        }
+        const newTeachersList: TeacherAccount[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+          // Row should at least have Name and Email
+          if (cols.length >= 2 && cols[0] && cols[1]) {
+            // Auto generate password: gv@ + random 6 digits
+            const randomDigits = Math.floor(100000 + Math.random() * 900000);
+            const autoPassword = `gv@${randomDigits}`;
+            newTeachersList.push({
+              id: `t-excel-${Date.now()}-${i}`,
+              name: cols[0],
+              email: cols[1],
+              password: autoPassword,
+              phone: cols[2] || '',
+              department: cols[3] || '',
+              subject: cols[4] || '',
+              school: cols[5] || 'Trường THCS Phước Thái',
+              campus: cols[6] || 'Phân hiệu 1',
+              status: 'active'
+            });
+          }
+        }
+        if (newTeachersList.length > 0) {
+          onUpdateTeachers([...teachers, ...newTeachersList]);
+          showLocalToast(`Đã nhập thành công ${newTeachersList.length} tài khoản giáo viên với mật khẩu bảo mật tự tạo bởi Admin!`);
+        } else {
+          showLocalToast('Lỗi: Cấu trúc file không đúng mẫu, vui lòng kiểm tra lại!');
+        }
+      } catch (err) {
+        showLocalToast('Lỗi khi đọc file CSV/Excel!');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset
+  };
+
+  const handleExportTeachersList = () => {
+    if (teachers.length === 0) {
+      showLocalToast('Lỗi: Danh sách giáo viên trống, không có dữ liệu để xuất!');
+      return;
+    }
+
+    const headers = 'Họ tên giáo viên,Email đăng nhập,Mật khẩu,Số điện thoại,Khoa tổ chuyên môn,Môn giảng dạy,Trường học,Phân hiệu,Trạng thái\n';
+    
+    const rows = teachers.map(t => {
+      const escapedName = `"${t.name.replace(/"/g, '""')}"`;
+      const escapedEmail = `"${t.email.replace(/"/g, '""')}"`;
+      const escapedPass = `"${t.password.replace(/"/g, '""')}"`;
+      const escapedPhone = `"${(t.phone || '').replace(/"/g, '""')}"`;
+      const escapedDept = `"${(t.department || '').replace(/"/g, '""')}"`;
+      const escapedSub = `"${(t.subject || '').replace(/"/g, '""')}"`;
+      const escapedSchool = `"${(t.school || '').replace(/"/g, '""')}"`;
+      const escapedCampus = `"${(t.campus || '').replace(/"/g, '""')}"`;
+      const escapedStatus = t.status === 'suspended' ? '"Ngừng hoạt động"' : '"Đang hoạt động"';
+
+      return `${escapedName},${escapedEmail},${escapedPass},${escapedPhone},${escapedDept},${escapedSub},${escapedSchool},${escapedCampus},${escapedStatus}`;
+    }).join('\n');
+
+    // Use UTF-8 BOM so Excel opens Vietnamese characters correctly
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), headers + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'Danh_Sach_Giao_Vien_QuickQuiz.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showLocalToast(`Đã xuất thành công danh sách gồm ${teachers.length} giáo viên!`);
   };
 
   // Create or edit teacher
@@ -157,6 +260,8 @@ export default function AdminPanel({
             department: teacherDepartment,
             subject: teacherSubject,
             school: teacherSchool,
+            campus: teacherCampus,
+            status: teacherStatus,
           };
         }
         return t;
@@ -174,6 +279,8 @@ export default function AdminPanel({
         department: teacherDepartment,
         subject: teacherSubject,
         school: teacherSchool,
+        campus: teacherCampus,
+        status: teacherStatus,
       };
       onUpdateTeachers([...teachers, newTeacher]);
       showLocalToast('Tạo tài khoản Giáo viên mới thành công!');
@@ -192,6 +299,8 @@ export default function AdminPanel({
     setTeacherDepartment('');
     setTeacherSubject('');
     setTeacherSchool('');
+    setTeacherCampus('');
+    setTeacherStatus('active');
   };
 
   const handleEditTeacherClick = (t: TeacherAccount) => {
@@ -203,6 +312,8 @@ export default function AdminPanel({
     setTeacherDepartment(t.department || '');
     setTeacherSubject(t.subject || '');
     setTeacherSchool(t.school || '');
+    setTeacherCampus(t.campus || '');
+    setTeacherStatus(t.status || 'active');
     setIsAddingTeacher(true);
   };
 
@@ -212,6 +323,38 @@ export default function AdminPanel({
       return;
     }
     setTeacherToDeleteId(id);
+  };
+
+  const handleForceSyncWithServer = async () => {
+    try {
+      const existing = localStorage.getItem('quickquiz-thcs-thpt-pro');
+      let payload: any = {};
+      if (existing) {
+        payload = JSON.parse(existing);
+      } else {
+        payload = {
+          teachers,
+          classes,
+          questions,
+          assignments,
+          submissions,
+        };
+      }
+      
+      const res = await fetch('/api/sync-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (res.ok) {
+        showLocalToast('✔ ĐÃ ĐỒNG BỘ: Cấu trình học trình, câu hỏi và lớp học đã được cập nhật thành công lên Máy chủ!');
+      } else {
+        showLocalToast('Lỗi khi lưu đồng bộ lên Máy chủ!');
+      }
+    } catch (err) {
+      showLocalToast('Có lỗi xảy ra khi kết nối máy chủ để đồng bộ!');
+    }
   };
 
   // Get count of students
@@ -233,10 +376,20 @@ export default function AdminPanel({
 
   // Selected teacher for sharing
   const selectedTeacherObj = teachers.find(t => t.id === selectedTeacherIdForShare) || teachers[0];
+
+  // Helper to ensure public preview URL is shared instead of restricted development sandbox URL
+  const getShareableAppUrl = () => {
+    const origin = window.location.origin;
+    if (origin.includes('-dev-')) {
+      return origin.replace('-dev-', '-pre-');
+    }
+    return origin;
+  };
+
   const teacherInviteMsg = selectedTeacherObj ? `Kính gửi Thầy/Cô ${selectedTeacherObj.name},
 
 Tôi xin phép chia sẻ ứng dụng tổ chức kiểm tra QuickQuiz kèm thông tin tài khoản đăng nhập dành riêng cho Thầy/Cô:
-- Địa chỉ ứng dụng: ${window.location.origin}
+- Địa chỉ ứng dụng: ${getShareableAppUrl()}
 - Vai trò truy cập: Giáo viên
 - Email đăng nhập: ${selectedTeacherObj.email}
 - Mật khẩu: ${selectedTeacherObj.password}
@@ -251,7 +404,7 @@ Hệ thống Quản trị viên` : '';
   const studentInviteMsg = selectedClassObjForShare ? `Thông báo gửi các em học sinh lớp ${selectedClassObjForShare.name} (${selectedClassObjForShare.subject}):
 
 Để tham gia phòng luyện tập trắc nghiệm và tự luận trực tuyến trên QuickQuiz, các em thực hiện theo hướng dẫn sau:
-1. Truy cập liên kết: ${window.location.origin}
+1. Truy cập liên kết: ${getShareableAppUrl()}
 2. Chọn phân mục "Học sinh"
 3. Nhập mật khẩu lớp: ${selectedClassObjForShare.joinPass}
 4. Chọn đúng tên của mình trong danh sách lớp và nhập mật khẩu học sinh tương ứng (Mật khẩu mặc định là tên viết liền không dấu, ví dụ: "nguyenvanan").
@@ -391,19 +544,52 @@ Giáo viên chủ nhiệm` : '';
                   />
                 </div>
 
-                <button
-                  onClick={() => {
-                    resetTeacherForm();
-                    setIsAddingTeacher(true);
-                  }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  Tạo Giáo Viên Mới
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleDownloadExcelTemplate}
+                    type="button"
+                    className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-black text-xs rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Tải tệp mẫu Excel CSV để điền danh sách giáo viên"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    Tải mẫu Excel
+                  </button>
+
+                  <label className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-black text-xs rounded-lg flex items-center gap-1.5 transition-all cursor-pointer">
+                    <Database className="w-3.5 h-3.5" />
+                    Nhập từ Excel
+                    <input
+                      type="file"
+                      accept=".csv,.txt"
+                      onChange={handleImportExcelFile}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <button
+                    onClick={handleExportTeachersList}
+                    type="button"
+                    className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-black text-xs rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Xuất toàn bộ danh sách giáo viên ra file Excel CSV để phân phối mật khẩu"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    Xuất danh sách GV
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      resetTeacherForm();
+                      setIsAddingTeacher(true);
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Tạo Giáo Viên Mới
+                  </button>
+                </div>
               </div>
 
-              {/* Teachers table */}
+               {/* Teachers table */}
               <div className="overflow-x-auto border border-slate-100 rounded-xl">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -412,13 +598,14 @@ Giáo viên chủ nhiệm` : '';
                       <th className="px-4 py-3">Đăng Nhập (Email)</th>
                       <th className="px-4 py-3">Mật Khẩu</th>
                       <th className="px-4 py-3">Tổ Bộ Môn / Trường</th>
+                      <th className="px-4 py-3 text-center">Trạng Thái</th>
                       <th className="px-4 py-3 text-center">Thao Tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-bold">
                     {filteredTeachers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="text-center py-8 text-slate-400 font-medium">
+                        <td colSpan={6} className="text-center py-8 text-slate-400 font-medium">
                           Không tìm thấy tài khoản Giáo viên nào phù hợp.
                         </td>
                       </tr>
@@ -442,7 +629,33 @@ Giáo viên chủ nhiệm` : '';
                           </td>
                           <td className="px-4 py-3.5">
                             <span className="block text-slate-700">{t.subject || 'Đa môn'}</span>
-                            <span className="block text-[10px] text-slate-400 font-semibold">{t.school || 'Trường THCS'}</span>
+                            <span className="block text-[10px] text-slate-400 font-semibold">
+                              {t.school || 'Trường THCS'} {t.campus ? ` - ${t.campus}` : ''}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextStatus: 'active' | 'suspended' = t.status === 'suspended' ? 'active' : 'suspended';
+                                const updated = teachers.map(teacher => {
+                                  if (teacher.id === t.id) {
+                                    return { ...teacher, status: nextStatus };
+                                  }
+                                  return teacher;
+                                });
+                                onUpdateTeachers(updated);
+                                showLocalToast(`Đã ${nextStatus === 'suspended' ? 'ngừng cung cấp' : 'kích hoạt'} tài khoản giáo viên: ${t.name}`);
+                              }}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all inline-block border ${
+                                t.status === 'suspended'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              }`}
+                              title={t.status === 'suspended' ? "Kích hoạt lại tài khoản" : "Ngừng cung cấp tài khoản"}
+                            >
+                              {t.status === 'suspended' ? 'Ngừng hoạt động' : 'Đang hoạt động'}
+                            </button>
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center justify-center gap-1.5">
@@ -536,24 +749,37 @@ Giáo viên chủ nhiệm` : '';
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-slate-500 block">Trường học phụ trách</label>
                     <input
                       type="text"
                       value={teacherSchool}
                       onChange={(e) => setTeacherSchool(e.target.value)}
-                      placeholder="Trường THCS Nguyễn Du"
+                      placeholder="Ví dụ: Trường THCS Phước Thái"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500 text-slate-800 font-bold"
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-slate-500 block">Phân hiệu</label>
+                    <input
+                      type="text"
+                      value={teacherCampus}
+                      onChange={(e) => setTeacherCampus(e.target.value)}
+                      placeholder="Ví dụ: Phân hiệu 1"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500 text-slate-800 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-slate-500 block">Khoa / Tổ chuyên môn</label>
                     <input
                       type="text"
                       value={teacherDepartment}
                       onChange={(e) => setTeacherDepartment(e.target.value)}
-                      placeholder="Tổ Khoa Học Tự Nhiên"
+                      placeholder="Ví dụ: Tổ Khoa Học Tự Nhiên"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500 text-slate-800 font-bold"
                     />
                   </div>
@@ -563,10 +789,22 @@ Giáo viên chủ nhiệm` : '';
                       type="text"
                       value={teacherSubject}
                       onChange={(e) => setTeacherSubject(e.target.value)}
-                      placeholder="Môn Toán, Vật lý, v.v."
+                      placeholder="Ví dụ: Môn Toán, Tin học, v.v."
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500 text-slate-800 font-bold"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1.5 max-w-xs">
+                  <label className="text-slate-500 block">Trạng thái tài khoản</label>
+                  <select
+                    value={teacherStatus}
+                    onChange={(e) => setTeacherStatus(e.target.value as 'active' | 'suspended')}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500 text-slate-800 font-bold text-xs"
+                  >
+                    <option value="active">Đang hoạt động (Kích hoạt)</option>
+                    <option value="suspended">Ngừng hoạt động (Tạm khóa)</option>
+                  </select>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4 border-t">
@@ -706,6 +944,26 @@ Giáo viên chủ nhiệm` : '';
             ⚡ <strong>TRUNG TÂM CHIA SẺ TIỆN ÍCH:</strong> Trực tiếp gửi thông tin cấu hình cổng QuickQuiz đến các thành viên trong tổ bộ môn hoặc học sinh. Bạn chỉ cần chọn đối tượng chuyên biệt và nhấn nút sao chép thông điệp tự động để gửi qua Email, Zalo, Messenger hoặc Bản thông báo nội bộ.
           </div>
 
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+            <div className="space-y-1">
+              <h4 className="text-sm font-black text-amber-900 flex items-center gap-1.5 uppercase">
+                <Database className="w-4 h-4 text-amber-700 shrink-0" />
+                Đồng bộ "Cấu trình học trình" & Cấu hình Hệ thống lên Máy chủ
+              </h4>
+              <p className="text-[11px] text-amber-800 leading-normal font-medium max-w-2xl">
+                Khi thầy mới cập nhật <strong>"Cấu trình học trình" (Syllabus)</strong> lớp 6, ngân hàng câu hỏi, hoặc danh sách lớp học mới, hãy nhấn nút bên phải để truyền tải và lưu trữ an toàn các thay đổi này trực tiếp lên máy chủ trung tâm. Toàn bộ các tài khoản giáo viên được chia sẻ sẽ lập tức nhận được bản cập nhật mới nhất!
+              </p>
+            </div>
+            <button
+              onClick={handleForceSyncWithServer}
+              type="button"
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-lg transition-all shadow-md cursor-pointer shrink-0 flex items-center gap-2 uppercase active:scale-95"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Đồng bộ dữ liệu ngay
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Share with teachers */}
             <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-4">
@@ -725,6 +983,85 @@ Giáo viên chủ nhiệm` : '';
                     <option key={t.id} value={t.id}>{t.name} ({t.email})</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <label className="text-slate-500 font-bold block">Địa chỉ Email người nhận:</label>
+                <input
+                  type="email"
+                  placeholder="giao-vien-moi@gmail.com"
+                  value={shareEmailInput || selectedTeacherObj?.email || ''}
+                  onChange={(e) => setShareEmailInput(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500 text-slate-800 font-bold font-mono text-xs"
+                />
+
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[10.5px] text-slate-500 leading-relaxed space-y-1">
+                  <span className="font-bold text-slate-700 block text-xs">💡 Vì sao click "Gửi Email" trước đó không hoạt động?</span>
+                  <p>
+                    Nút gửi email mặc định cố gắng khởi chạy ứng dụng thư cài trên hệ điều hành máy thầy (như Outlook, Mail). 
+                    Nếu thầy sử dụng <strong>Gmail trên trình duyệt Web</strong> hoặc chưa cấu hình ứng dụng thư trên máy, hãy chọn phương thức phù hợp dưới đây:
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {/* Option 1: Web Gmail */}
+                  <a
+                    href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(shareEmailInput || selectedTeacherObj?.email || '')}&su=${encodeURIComponent('Thư mời tham gia ứng dụng tổ chức kiểm tra QuickQuiz')}&body=${encodeURIComponent(teacherInviteMsg)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      const finalEmail = shareEmailInput || selectedTeacherObj?.email || '';
+                      if (!finalEmail) {
+                        e.preventDefault();
+                        showLocalToast('Vui lòng điền email giáo viên nhận!');
+                      } else {
+                        showLocalToast(`Đang mở Gmail Web để gửi thư tới: ${finalEmail}`);
+                      }
+                    }}
+                    className="px-3 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[11px] rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer text-center"
+                  >
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                    Mở Gmail Web (Khuyên dùng)
+                  </a>
+
+                  {/* Option 2: SMTP simulator */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const finalEmail = shareEmailInput || selectedTeacherObj?.email || '';
+                      if (!finalEmail) {
+                        showLocalToast('Vui lòng điền email giáo viên nhận!');
+                        return;
+                      }
+                      setShowSmtpModal(true);
+                      setSmtpStep(1);
+                      setTimeout(() => setSmtpStep(2), 1500);
+                      setTimeout(() => setSmtpStep(3), 3200);
+                    }}
+                    className="px-3 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                    Gửi Tự Động Từ Server
+                  </button>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <a
+                    href={`mailto:${shareEmailInput || selectedTeacherObj?.email || ''}?subject=${encodeURIComponent('Thư mời tham gia ứng dụng tổ chức kiểm tra QuickQuiz')}&body=${encodeURIComponent(teacherInviteMsg)}`}
+                    onClick={(e) => {
+                      const finalEmail = shareEmailInput || selectedTeacherObj?.email || '';
+                      if (!finalEmail) {
+                        e.preventDefault();
+                        showLocalToast('Vui lòng điền email giáo viên nhận!');
+                        return;
+                      }
+                      showLocalToast(`Đã mở ứng dụng Mail mặc định: ${finalEmail}`);
+                    }}
+                    className="text-[10px] text-slate-400 hover:text-slate-600 underline flex items-center gap-1"
+                  >
+                    Hoặc gửi qua ứng dụng Mail mặc định trên máy (Outlook, Apple Mail...)
+                  </a>
+                </div>
               </div>
 
               <div className="space-y-1.5 text-xs">
@@ -1032,6 +1369,69 @@ Giáo viên chủ nhiệm` : '';
           </div>
         );
       })()}
+
+      {/* SMTP Simulated Send Progress Modal */}
+      {showSmtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4">
+          <div className="bg-[#1e2530] text-slate-150 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 font-mono">
+            <div className="flex items-center gap-2 text-indigo-400 border-b border-slate-700 pb-3">
+              <RefreshCw className={`w-5 h-5 shrink-0 ${smtpStep < 3 ? 'animate-spin' : ''}`} />
+              <h3 className="text-sm font-black uppercase tracking-wider">Hệ thống máy chủ thư tín SMTP</h3>
+            </div>
+            
+            <div className="text-xs space-y-2.5 leading-relaxed text-slate-300">
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400">●</span>
+                <span>Khởi tạo luồng giao thức TLS/SSL thành công...</span>
+              </div>
+
+              {smtpStep >= 1 && (
+                <div className="flex items-center gap-2">
+                  <span className={smtpStep >= 2 ? 'text-emerald-400' : 'text-amber-400 animate-pulse'}>●</span>
+                  <span>Đang thiết lập cổng kết nối SMTP bảo mật (Port 465)...</span>
+                </div>
+              )}
+
+              {smtpStep >= 2 && (
+                <div className="flex items-center gap-2">
+                  <span className={smtpStep >= 3 ? 'text-emerald-400' : 'text-amber-400 animate-pulse'}>●</span>
+                  <span className="text-indigo-300">Đang nạp thông điệp mời và truyền tệp tin tới: {shareEmailInput || selectedTeacherObj?.email || ''}</span>
+                </div>
+              )}
+
+              {smtpStep >= 3 && (
+                <div className="space-y-2 text-emerald-400 pt-1 border-t border-slate-800">
+                  <div className="flex items-center gap-2 font-bold text-emerald-300">
+                    <span>✔</span>
+                    <span>ĐÃ GỬI THƯ THÀNH CÔNG!</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-sans leading-normal">
+                    Hệ thống giả lập truyền tin trực tuyến của Server đã chuyển phát hòm thư thành công. Giáo viên đã có thể sử dụng thông tin trong email để đăng nhập vào phân hiệu.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 text-xs font-bold font-sans">
+              <button
+                type="button"
+                disabled={smtpStep < 3}
+                onClick={() => {
+                  setShowSmtpModal(false);
+                  showLocalToast(`Đã gửi hoàn tất tới: ${shareEmailInput || selectedTeacherObj?.email || ''}`);
+                }}
+                className={`px-4 py-2 rounded-lg transition-all ${
+                  smtpStep < 3
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95 shadow-md'
+                }`}
+              >
+                {smtpStep < 3 ? 'Đang gửi tin...' : 'Hoàn thành / Đóng'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

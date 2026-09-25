@@ -315,6 +315,38 @@ export function formatMathForWord(text: string): string {
   return html;
 }
 
+export function cleanQuestionContentForStudent(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\[(?:Nhận biết|Thông hiểu|Vận dụng|Vận dụng cao|Đề xuất|Bộ Giáo dục|Mức độ \d+|MCQ|YESNO|SHORT|ESSAY)\][:\-\s]*/gi, '')
+    .trim();
+}
+
+export function cleanOptionPrefix(opt: string, index: number, type: string): string {
+  if (!opt) return '';
+  const trimmed = opt.trim();
+  
+  if (type === 'MCQ') {
+    const letters = ['A', 'B', 'C', 'D'];
+    const currentLetter = letters[index];
+    const regex = new RegExp(`^[a-d${currentLetter}]\\s*[\\.\\/\\)\\:-]\\s*`, 'i');
+    if (regex.test(trimmed)) {
+      return trimmed.replace(regex, '').trim();
+    }
+  }
+  
+  if (type === 'YESNO') {
+    const letters = ['a', 'b', 'c', 'd'];
+    const currentLetter = letters[index];
+    const regex = new RegExp(`^[a-d${currentLetter}]\\s*[\\.\\/\\)\\:-]\\s*`, 'i');
+    if (regex.test(trimmed)) {
+      return trimmed.replace(regex, '').trim();
+    }
+  }
+  
+  return trimmed;
+}
+
 export function generateDocxBlob(
   title: string,
   subject: string,
@@ -401,13 +433,13 @@ export function generateDocxBlob(
       </style>
     </head>
     <body>
-      <table class="header-table">
+      <table class="header-table" border="0" cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; border: none; margin-bottom: 24px;">
         <tr>
-          <td width="55%" class="text-center bold" style="text-align: center;">
+          <td width="55%" class="text-center bold" style="text-align: center; border: none;">
             SỞ GIÁO DỤC VÀ ĐÀO TẠO ĐA PHÂN HỢP<br>
             TRƯỜNG THCS - THPT CHUẨN ĐẦU RA CV 7991
           </td>
-          <td width="45%" class="text-center bold" style="text-align: center;">
+          <td width="45%" class="text-center bold" style="text-align: center; border: none;">
             ĐỀ KHẢO SÁT CHẤT LƯỢNG THƯỜNG NIÊN<br>
             NĂM HỌC 2026 - 2027
           </td>
@@ -430,32 +462,32 @@ export function generateDocxBlob(
   questions.forEach((q, idx) => {
     html += `
       <div class="question" style="margin-bottom: 12px;">
-        <span class="bold" style="font-weight: bold;">Câu ${idx + 1}:</span> [${q.level}] 
-        ${formatMathForWord(q.content)}
+        <span class="bold" style="font-weight: bold;">Câu ${idx + 1}:</span> 
+        ${formatMathForWord(cleanQuestionContentForStudent(q.content))}
       </div>
     `;
 
     if (q.type === 'MCQ' && q.options && q.options.length >= 4) {
       html += `
-        <table class="options-table" style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+        <table class="options-table" border="0" cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; border: none; margin-bottom: 12px;">
           <tr>
-            <td style="width: 25%; padding: 4px;"><span class="bold" style="font-weight: bold;">A.</span> ${formatMathForWord(q.options[0])}</td>
-            <td style="width: 25%; padding: 4px;"><span class="bold" style="font-weight: bold;">B.</span> ${formatMathForWord(q.options[1])}</td>
-            <td style="width: 25%; padding: 4px;"><span class="bold" style="font-weight: bold;">C.</span> ${formatMathForWord(q.options[2])}</td>
-            <td style="width: 25%; padding: 4px;"><span class="bold" style="font-weight: bold;">D.</span> ${formatMathForWord(q.options[3])}</td>
+            <td style="width: 25%; padding: 4px; border: none;"><span class="bold" style="font-weight: bold;">A.</span> ${formatMathForWord(cleanOptionPrefix(q.options[0], 0, 'MCQ'))}</td>
+            <td style="width: 25%; padding: 4px; border: none;"><span class="bold" style="font-weight: bold;">B.</span> ${formatMathForWord(cleanOptionPrefix(q.options[1], 1, 'MCQ'))}</td>
+            <td style="width: 25%; padding: 4px; border: none;"><span class="bold" style="font-weight: bold;">C.</span> ${formatMathForWord(cleanOptionPrefix(q.options[2], 2, 'MCQ'))}</td>
+            <td style="width: 25%; padding: 4px; border: none;"><span class="bold" style="font-weight: bold;">D.</span> ${formatMathForWord(cleanOptionPrefix(q.options[3], 3, 'MCQ'))}</td>
           </tr>
         </table>
       `;
     } else if (q.type === 'YESNO' && q.options && q.options.length >= 4) {
       html += `
-        <table class="options-table" style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+        <table class="options-table" border="0" cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; border: none; margin-bottom: 12px;">
           <tr>
-            <td style="width: 50%; padding: 4px;"><span class="bold" style="font-weight: bold;">a/</span> ${formatMathForWord(q.options[0])}</td>
-            <td style="width: 50%; padding: 4px;"><span class="bold" style="font-weight: bold;">b/</span> ${formatMathForWord(q.options[1])}</td>
+            <td style="width: 50%; padding: 4px; border: none;"><span class="bold" style="font-weight: bold;">a/</span> ${formatMathForWord(cleanOptionPrefix(q.options[0], 0, 'YESNO'))}</td>
+            <td style="width: 50%; padding: 4px; border: none;"><span class="bold" style="font-weight: bold;">b/</span> ${formatMathForWord(cleanOptionPrefix(q.options[1], 1, 'YESNO'))}</td>
           </tr>
           <tr>
-            <td style="width: 50%; padding: 4px;"><span class="bold" style="font-weight: bold;">c/</span> ${formatMathForWord(q.options[2])}</td>
-            <td style="width: 50%; padding: 4px;"><span class="bold" style="font-weight: bold;">d/</span> ${formatMathForWord(q.options[3])}</td>
+            <td style="width: 50%; padding: 4px; border: none;"><span class="bold" style="font-weight: bold;">c/</span> ${formatMathForWord(cleanOptionPrefix(q.options[2], 2, 'YESNO'))}</td>
+            <td style="width: 50%; padding: 4px; border: none;"><span class="bold" style="font-weight: bold;">d/</span> ${formatMathForWord(cleanOptionPrefix(q.options[3], 3, 'YESNO'))}</td>
           </tr>
         </table>
       `;
@@ -527,6 +559,7 @@ interface CreateExamPanelProps {
   onSaveExamToBank: (exam: Omit<Exam, 'id' | 'createdAt' | 'status'>) => void;
   onNavigate: (moduleName: string) => void;
   onAIQuestionsCreated: (newQs: Question[]) => void;
+  showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 export default function CreateExamPanel({
@@ -535,6 +568,7 @@ export default function CreateExamPanel({
   onSaveExamToBank,
   onNavigate,
   onAIQuestionsCreated,
+  showToast,
 }: CreateExamPanelProps) {
   // DESIGN MODES
   const [creationMode, setCreationMode] = useState<'matrix' | 'manual' | 'fromBank'>('matrix');
@@ -972,6 +1006,155 @@ export default function CreateExamPanel({
   const bankActiveSyllabusObj = syllabus.find((sy) => sy.subject === bankSub && sy.grade === bankGrade);
   const bankCurrentChapters = bankActiveSyllabusObj?.chapters || [];
 
+  // AI Audit States for verifying correctness of knowledge
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditResults, setAuditResults] = useState<Record<string, { isCorrect: boolean; issueType: string; feedback: string }>>({});
+
+  const handleDeduplicateExamQuestions = (mode: 'matrix' | 'manual') => {
+    const list = mode === 'matrix' ? generatedQPreview : manualQuestions;
+    if (list.length === 0) return;
+    
+    const seenContents = new Set<string>();
+    const duplicateIndices: number[] = [];
+    
+    list.forEach((q, idx) => {
+      const cleaned = q.content.trim().toLowerCase().replace(/\s+/g, '');
+      if (seenContents.has(cleaned)) {
+        duplicateIndices.push(idx);
+      } else {
+        seenContents.add(cleaned);
+      }
+    });
+
+    if (duplicateIndices.length === 0) {
+      if (showToast) {
+        showToast("Tuyệt vời! Không tìm thấy câu hỏi nào trùng lặp trong đề thi này.", "info");
+      } else {
+        alert("Tuyệt vời! Không tìm thấy câu hỏi nào trùng lặp trong đề thi này.");
+      }
+      return;
+    }
+
+    if (mode === 'matrix') {
+      // Auto swap each duplicate index
+      let newPreview = [...generatedQPreview];
+      let swappedCount = 0;
+
+      duplicateIndices.forEach((idx) => {
+        const oldQ = newPreview[idx];
+        const usedIds = new Set(newPreview.map((q) => q.id));
+        const usedContents = new Set(newPreview.map((q) => q.content.trim().toLowerCase().replace(/\s+/g, '')));
+
+        // Find matching questions from bank that aren't already used
+        const uniqueBank = deduplicateQuestions(questions);
+        const matches = uniqueBank.filter((q) => {
+          const cleanedBankContent = q.content.trim().toLowerCase().replace(/\s+/g, '');
+          return (
+            q.id !== oldQ.id &&
+            !usedIds.has(q.id) &&
+            !usedContents.has(cleanedBankContent) &&
+            q.subject === sub &&
+            q.grade === grade &&
+            q.type === oldQ.type &&
+            selectedChapterIds.includes(q.chapterId)
+          );
+        });
+
+        if (matches.length > 0) {
+          const picked = matches[Math.floor(Math.random() * matches.length)];
+          newPreview[idx] = picked;
+          swappedCount++;
+        } else {
+          // Generate random one on-the-fly
+          const fresh = generateRandomQuestionOnTheFly(
+            sub,
+            grade,
+            oldQ.type,
+            oldQ.level,
+            oldQ.chapterId,
+            oldQ.lessonId,
+            oldQ.topic,
+            idx
+          );
+          newPreview[idx] = fresh;
+          swappedCount++;
+        }
+      });
+
+      setGeneratedQPreview(newPreview);
+      if (showToast) {
+        showToast(`Đã lọc trùng thành công! Đã tự động thay thế ${swappedCount} câu hỏi trùng lặp bằng câu hỏi mới.`, "success");
+      } else {
+        alert(`Đã lọc trùng thành công! Đã tự động thay thế ${swappedCount} câu hỏi bị lặp bằng các câu hỏi mới không trùng lặp từ ngân hàng/AI.`);
+      }
+    } else {
+      // For manual creation mode, simply filter out duplicate indices!
+      const filtered = manualQuestions.filter((_, idx) => !duplicateIndices.includes(idx));
+      setManualQuestions(filtered);
+      if (showToast) {
+        showToast(`Đã lọc trùng thành công! Đã loại bỏ ${duplicateIndices.length} câu hỏi trùng lặp khỏi danh sách soạn thảo.`, "success");
+      } else {
+        alert(`Đã lọc trùng thành công! Đã loại bỏ ${duplicateIndices.length} câu hỏi trùng lặp khỏi danh sách soạn thảo.`);
+      }
+    }
+  };
+
+  const handleVerifyKnowledge = async (mode: 'matrix' | 'manual') => {
+    const list = mode === 'matrix' ? generatedQPreview : manualQuestions;
+    if (list.length === 0) return;
+    setIsAuditing(true);
+    setAuditResults({});
+    try {
+      const response = await fetch('/api/verify-knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questions: list }),
+      });
+      const data = await response.json();
+      if (data.success && Array.isArray(data.results)) {
+        const resultsMap: Record<string, { isCorrect: boolean; issueType: string; feedback: string }> = {};
+        data.results.forEach((res: any) => {
+          resultsMap[res.id] = {
+            isCorrect: res.isCorrect,
+            issueType: res.issueType,
+            feedback: res.feedback,
+          };
+        });
+        setAuditResults(resultsMap);
+        
+        // Count errors
+        const errorCount = data.results.filter((r: any) => !r.isCorrect).length;
+        if (errorCount === 0) {
+          if (showToast) {
+            showToast('Trí tuệ QUICK-AI xác nhận: 100% kiến thức trong đề thi hoàn toàn CHÍNH XÁC và khoa học!', 'success');
+          } else {
+            alert('Chúc mừng! Trí tuệ QUICK-AI đã hoàn thành thẩm định và xác nhận 100% kiến thức trong đề thi hoàn toàn CHÍNH XÁC và khoa học!');
+          }
+        } else {
+          if (showToast) {
+            showToast(`Thẩm định hoàn tất: AI đã phát hiện ${errorCount} điểm cần lưu ý hoặc điều chỉnh đáp án.`, 'info');
+          } else {
+            alert(`Thẩm định hoàn tất: AI đã phát hiện ${errorCount} câu hỏi có thể có sai sót kiến thức hoặc nhầm lẫn đáp án. Vui lòng xem phản hồi chi tiết bên dưới mỗi câu hỏi.`);
+          }
+        }
+      } else {
+        if (showToast) {
+          showToast('Có lỗi xảy ra khi gọi AI thẩm định: ' + (data.error || 'Phản hồi không hợp lệ'), 'error');
+        } else {
+          alert('Có lỗi xảy ra khi gọi AI thẩm định: ' + (data.error || 'Phản hồi không hợp lệ'));
+        }
+      }
+    } catch (err: any) {
+      if (showToast) {
+        showToast('Không thể kết nối đến máy chủ AI thẩm định kiến thức: ' + err.message, 'error');
+      } else {
+        alert('Không thể kết nối đến máy chủ AI thẩm định kiến thức: ' + err.message);
+      }
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
   const toggleTypeSelected = (t: QuestionType) => {
     if (typesSelected.includes(t)) {
       setTypesSelected(typesSelected.filter((item) => item !== t));
@@ -1137,9 +1320,13 @@ export default function CreateExamPanel({
         { id: 'ch-general', title: 'Khối kiến thức rèn luyện tổng hợp', lessons: [] },
       ];
 
-      // Filter active chapters according to user selection (or fallback to all if none selected)
-      const activeChapters = fullChapters.filter(ch => selectedChapterIds.includes(ch.id));
-      const finalChapters = activeChapters.length > 0 ? activeChapters : fullChapters;
+      // STRICT CONSTRAINT: Only pick from the selected chapters. If none selected, alert user.
+      const finalChapters = fullChapters.filter(ch => selectedChapterIds.includes(ch.id));
+      if (finalChapters.length === 0) {
+        alert('Vui lòng chọn ít nhất một Chương hoặc Bài học trong mục "CHỌN CHƯƠNG VÀ BÀI HỌC" trước khi tạo đề!');
+        setIsGenerating(false);
+        return;
+      }
 
       const newMatrix = finalChapters.map((ch, idx) => {
         const share = Math.floor(totalCalculatedCount / finalChapters.length);
@@ -1168,12 +1355,11 @@ export default function CreateExamPanel({
         const matchSubGrade = q.subject === sub && q.grade === grade;
         if (!matchSubGrade) return false;
         
-        // If specific chapters were selected, match them!
-        if (selectedChapterIds.length > 0 && !selectedChapterIds.includes(q.chapterId)) {
+        // STRICT CONSTRAINT: App MUST only select questions belonging to the selected chapters and lessons
+        if (!selectedChapterIds.includes(q.chapterId)) {
           return false;
         }
-        // If specific lessons were selected, match them too!
-        if (selectedLessonIds.length > 0 && q.lessonId && !selectedLessonIds.includes(q.lessonId)) {
+        if (q.lessonId && !selectedLessonIds.includes(q.lessonId)) {
           return false;
         }
         return true;
@@ -1250,7 +1436,7 @@ export default function CreateExamPanel({
                 lessonId,
                 topic: topicName,
                 type: 'YESNO',
-                content: `[Rèn luyện] Cho mệnh đề hình học không gian hoặc phương trình lượng giác: "Mọi phương trình $ax + b = 0$ đều có nghiệm duy nhất". Xét tính đúng sai của khẳng định dưới.`,
+                content: `[Rèn luyện #${i + 1}] Cho mệnh đề hình học không gian hoặc phương trình lượng giác: "Mọi phương trình $ax + b = 0$ đều có nghiệm duy nhất". Xét tính đúng sai của khẳng định dưới.`,
                 options: [
                   'a) Nếu $a = 0$ và $b \\neq 0$, phương trình hoàn toàn vô nghiệm.',
                   'b) Nếu $a \\neq 0$ và $b = 0$, phương trình có nghiệm duy nhất $x = 0$.',
@@ -1302,7 +1488,126 @@ export default function CreateExamPanel({
             }
           } else {
             // Tin học
+            const mcqList = [
+              {
+                content: `Máy tính Pascaline được sáng chế bởi nhà khoa học Blaise Pascal vào thế kỷ nào?`,
+                options: [`Thế kỷ XVII (Năm 1642)`, `Thế kỷ XVIII`, `Thế kỷ XIX`, `Thế kỷ XX`],
+                answer: 'A',
+                explain: 'Pascaline được nhà toán học Blaise Pascal sáng chế năm 1642 (thuộc thế kỷ XVII).'
+              },
+              {
+                content: `Ai là người được coi là "cha đẻ của công nghệ máy tính" nhờ thiết kế ra Máy sai phân (Difference Engine) và Máy phân tích (Analytical Engine)?`,
+                options: [`Charles Babbage`, `Blaise Pascal`, `Alan Turing`, `Ada Lovelace`],
+                answer: 'A',
+                explain: 'Charles Babbage đã thiết kế Máy sai phân và Máy phân tích, đặt nền móng cho máy tính hiện đại.'
+              },
+              {
+                content: `Thế hệ máy tính thứ hai (1955 - 1965) sử dụng linh kiện điện tử lõi nào sau đây?`,
+                options: [`Bóng bán dẫn (Transistor)`, `Bóng chân không`, `Vi mạch tích hợp (IC)`, `Bộ vi xử lý siêu lớn (VLSI)`],
+                answer: 'A',
+                explain: 'Thế hệ thứ nhất dùng bóng chân không; thế hệ thứ hai dùng bóng bán dẫn.'
+              },
+              {
+                content: `Đặc điểm nổi bật nào dưới đây KHÔNG phải của thông tin số?`,
+                options: [`Khó sao chép và khó truyền bá đi xa`, `Dễ dàng được nhân bản và chia sẻ`, `Có thể bị chỉnh sửa, làm giả dễ dàng`, `Lưu trữ với dung lượng cực lớn`],
+                answer: 'A',
+                explain: 'Thông tin số cực kỳ dễ sao chép, lưu trữ và truyền bá thông qua mạng Internet.'
+              },
+              {
+                content: `Để đánh giá độ tin cậy của thông tin trên mạng, ta nên thực hiện tiêu chí nào?`,
+                options: [`Kiểm tra nguồn tin, tác giả, tính cập nhật và đối chiếu chéo`, `Chỉ tin vào bài viết có nhiều lượt thích (Like)`, `Chỉ đọc tiêu đề giật gân`, `Tin ngay vào bài chia sẻ trên mạng xã hội`],
+                answer: 'A',
+                explain: 'Cần kiểm tra nguồn gốc, tác giả uy tín, ngày đăng tải và đối chiếu chéo các thông tin độc lập.'
+              },
+              {
+                content: `Trong phần mềm bảng tính Excel, nút lệnh dùng để lọc dữ liệu tự động có biểu tượng hình gì?`,
+                options: [`Cái phễu (Filter)`, `Kính lúp`, `Biểu đồ cột`, `Dấu cộng`],
+                answer: 'A',
+                explain: 'Nút Filter trong Excel có hình chiếc phễu lọc để hiển thị các hàng dữ liệu thỏa mãn điều kiện.'
+              },
+              {
+                content: `Khi thiết kế một thuật toán lặp với số lần chưa biết trước, ta cần xác định rõ điều kiện gì?`,
+                options: [`Điều kiện dừng để tránh lặp vô hạn`, `Số lần lặp cố định trước`, `Tên biến đếm bắt buộc`, `Hằng số lặp`],
+                answer: 'A',
+                explain: 'Thuật toán lặp chưa biết trước cần xác định rõ điều kiện để dừng lặp, tránh rơi vào vòng lặp vô tận.'
+              },
+              {
+                content: `Bản quyền phần mềm (Software Copyright) bảo vệ quyền lợi hợp pháp của đối tượng nào?`,
+                options: [`Tác giả hoặc nhà phát triển phần mềm`, `Người mua đĩa CD phần mềm`, `Học sinh đang thực hành máy tính`, `Cơ quan quản lý Internet`],
+                answer: 'A',
+                explain: 'Bản quyền phần mềm bảo vệ quyền sở hữu trí tuệ của tác giả hoặc tổ chức phát triển phần mềm.'
+              }
+            ];
+
+            const yesnoList = [
+              {
+                content: `[Nhận định] Hãy nhận định tính đúng/sai của các thông cáo về hệ nhị phân và hệ đếm trong xử lý phần cứng máy tính:`,
+                options: [
+                  'a) Hệ nhị phân chỉ sử dụng hai ký tự chữ số là 0 và 1.',
+                  'b) Một Byte dữ liệu chuẩn tương đương với 10 bít nhị phân cơ bản.',
+                  'c) Hệ thập lục phân (Hexadecimal) hỗ trợ biểu diễn gọn gàng hơn cho các chuỗi nhị phân dài.',
+                  'd) RAM mất toàn bộ dữ liệu lưu trữ khi ngắt nguồn điện cấp.'
+                ],
+                answer: 'true,false,true,true',
+                explain: 'Một byte chuẩn tương đương với 8 bit nhị phân chứ không phải 10 bit.'
+              },
+              {
+                content: `[Nhận định] Cho các khẳng định về an toàn thông tin và văn hóa ứng xử trên không gian mạng:`,
+                options: [
+                  'a) Học sinh có quyền tự do tuyệt đối đăng tải hình ảnh riêng tư của người khác không cần xin phép.',
+                  'b) Mật khẩu mạnh nên chứa cả chữ hoa, chữ thường, chữ số và ký hiệu đặc biệt.',
+                  'c) Việc sử dụng phần mềm bẻ khóa (crack) là hành vi tôn trọng quyền tác giả.',
+                  'd) Khi phát hiện bị bắt nạt trên mạng, nên báo ngay cho thầy cô, cha mẹ hoặc cơ quan chức năng.'
+                ],
+                answer: 'false,true,false,true',
+                explain: 'Không đăng tải ảnh riêng tư của người khác khi chưa xin phép. Phần mềm bẻ khóa vi phạm bản quyền.'
+              },
+              {
+                content: `[Nhận định] Xét các mệnh đề sau liên quan đến kỹ thuật soạn thảo văn bản và phần mềm trình chiếu:`,
+                options: [
+                  'a) Phần mềm trình chiếu chỉ hỗ trợ chèn văn bản, không thể chèn video hay âm thanh.',
+                  'b) Nên sử dụng màu chữ tương phản cao với màu nền của trang chiếu để người xem dễ đọc.',
+                  'c) Mục "Header and Footer" trong Word giúp tạo tiêu đề đầu và chân trang tự động lặp lại.',
+                  'd) Mọi trang slide trình chiếu bắt buộc phải có dung lượng chữ trên 500 từ mới đạt chuẩn.'
+                ],
+                answer: 'false,true,true,false',
+                explain: 'Trình chiếu có thể chèn đa phương tiện. Không nên viết quá nhiều chữ lên slide.'
+              }
+            ];
+
+            const shortList = [
+              {
+                content: `Hãy đổi số thập phân 13 sang hệ nhị phân thuần túy biểu diễn trong máy tính (nhập chuỗi gồm các chữ số 0 và 1 viết liền).`,
+                answer: '1101',
+                explain: 'Chia liên tiếp cho 2 lấy số dư ngược từ dưới lên: 13/2=6 dư 1, 6/2=3 dư 0, 3/2=1 dư 1, 1/2=0 dư 1. Kết quả là 1101.'
+              },
+              {
+                content: `Trong phần mềm bảng tính Excel, tên hàm dùng để tính tổng các giá trị trong một phạm vi là gì? (Nhập tên hàm bằng chữ in hoa).`,
+                answer: 'SUM',
+                explain: 'Hàm SUM dùng để tính tổng các ô dữ liệu được chỉ định.'
+              },
+              {
+                content: `Trong phần mềm bảng tính Excel, tên hàm dùng để tìm giá trị lớn nhất trong một phạm vi là gì? (Nhập tên hàm bằng chữ in hoa).`,
+                answer: 'MAX',
+                explain: 'Hàm MAX trả về giá trị lớn nhất trong dãy dữ liệu.'
+              }
+            ];
+
+            const essayList = [
+              {
+                content: `Trình bày nguyên lý hoạt động của kiến trúc Von Neumann và vai trò cụ thể của Bộ nhớ trong máy tính hiện đại.`,
+                answer: 'Nêu rõ cấu trúc gồm: CPU (ALU, CU), Bộ nhớ, Thiết bị vào/ra, và nguyên lý lưu trữ chương trình.',
+                explain: 'Học sinh cần trình bày đủ 3 thành phần chính của kiến trúc Von Neumann và giải thích cơ chế chu trình Nạp - Giải mã - Thực thi.'
+              },
+              {
+                content: `Phân tích tác động tích cực và tiêu cực của Internet và mạng xã hội đối với việc học tập và cuộc sống của học sinh THCS hiện nay.`,
+                answer: 'Tích cực: Học tập trực tuyến, cập nhật kiến thức, kết nối bạn bè. Tiêu cực: Gây nghiện, xao nhãng học tập, rủi ro lừa đảo.',
+                explain: 'Học sinh cần đưa ra lập luận đa chiều, liên hệ thực tế bản thân và gia đình để làm nổi bật luận điểm.'
+              }
+            ];
+
             if (type === 'MCQ') {
+              const item = mcqList[i % mcqList.length];
               generatedQs.push({
                 id,
                 grade,
@@ -1312,15 +1617,16 @@ export default function CreateExamPanel({
                 lessonId,
                 topic: topicName,
                 type: 'MCQ',
-                content: `[Đề xuất] Thuật toán tìm kiếm nhị phân (Binary Search) có độ phức tạp thời gian trung bình thuộc nhóm nào sau đây?`,
-                options: [`$O(\\log n)$`, `$O(n)$`, `$O(n \\log n)$`, `$O(n^2)$`],
-                answer: '0',
-                explain: 'Tìm kiếm nhị phân chia đôi dãy tìm kiếm ở mỗi bước nên độ phức tạp là Logarithmic thời gian.',
+                content: `[Rèn luyện #${i + 1}] ` + item.content,
+                options: item.options,
+                answer: item.answer,
+                explain: item.explain,
                 level,
                 source: 'Hệ thống biên soạn',
                 status: 'Đã duyệt',
               });
             } else if (type === 'YESNO') {
+              const item = yesnoList[i % yesnoList.length];
               generatedQs.push({
                 id,
                 grade,
@@ -1330,20 +1636,16 @@ export default function CreateExamPanel({
                 lessonId,
                 topic: topicName,
                 type: 'YESNO',
-                content: `[Đề xuất] Hãy nhận định tính đúng/sai của các thông cáo về hệ nhị phân và hệ đếm trong xử lý phần cứng máy tính:`,
-                options: [
-                  'a) Hệ nhị phân chỉ sử dụng hai ký tự chữ số là 0 và 1.',
-                  'b) Một Byte dữ liệu chuẩn tương đương với 10 bít nhị phân cơ bản.',
-                  'c) Hệ thập lục phân (Hexadecimal) hỗ trợ biểu diễn gọn gàng hơn cho các chuỗi nhị phân dài.',
-                  'd) RAM mất toàn bộ dữ liệu lưu trữ khi ngắt nguồn điện cấp.',
-                ],
-                answer: 'true,false,true,true',
-                explain: 'Một byte chuẩn tương đương với 8 bit nhị phân chứ không phải 10 bit.',
+                content: `[Rèn luyện #${i + 1}] ` + item.content,
+                options: item.options,
+                answer: item.answer,
+                explain: item.explain,
                 level,
                 source: 'Hệ thống biên soạn',
                 status: 'Đã duyệt',
               });
             } else if (type === 'SHORT') {
+              const item = shortList[i % shortList.length];
               generatedQs.push({
                 id,
                 grade,
@@ -1353,15 +1655,16 @@ export default function CreateExamPanel({
                 lessonId,
                 topic: topicName,
                 type: 'SHORT',
-                content: `[Đề xuất] Hãy đổi số thập phân 13 sang hệ nhị phân thuần túy biểu diễn trong máy tính (nhập chuỗi không dấu cách).`,
+                content: `[Rèn luyện #${i + 1}] ` + item.content,
                 options: [],
-                answer: '1101',
-                explain: 'Chia liên tiếp cho 2 lấy số dư ngược từ dưới lên: 13/2=6 dư 1, 6/2=3 dư 0, 3/2=1 dư 1, 1/2=0 dư 1. Kết quả là 1101.',
+                answer: item.answer,
+                explain: item.explain,
                 level,
                 source: 'Hệ thống biên soạn',
                 status: 'Đã duyệt',
               });
             } else {
+              const item = essayList[i % essayList.length];
               generatedQs.push({
                 id,
                 grade,
@@ -1371,10 +1674,10 @@ export default function CreateExamPanel({
                 lessonId,
                 topic: topicName,
                 type: 'ESSAY',
-                content: `[Đề xuất/Tự luận] Trình bày nguyên lý hoạt động của kiến trúc Von Neumann và vai trò cụ thể của Bộ nhớ trong máy tính hiện đại.`,
+                content: `[Rèn luyện #${i + 1}] ` + item.content,
                 options: [],
-                answer: 'Nêu rõ cấu trúc gồm: CPU (ALU, CU), Bộ nhớ, Thiết bị vào/ra, và nguyên lý lưu trữ chương trình.',
-                explain: 'Học sinh cần trình bày đủ 3 thành phần chính của kiến trúc Von Neumann và giải thích cơ chế chu trình Nạp - Giải mã - Thực thi.',
+                answer: item.answer,
+                explain: item.explain,
                 level,
                 source: 'Hệ thống biên soạn',
                 status: 'Đã duyệt',
@@ -1475,16 +1778,22 @@ export default function CreateExamPanel({
   // Parser: scans custom syntax structure in line-by-line formatted text
   // Parser: scans custom syntax structure in line-by-line formatted text
   const parseQuestionsFromScript = (rawText: string) => {
+    const cleanText = rawText.replace(/^\uFEFF/, '').trim();
     const parsedQs: Question[] = [];
     
     let textBlocks: string[] = [];
-    const lowerText = rawText.toLowerCase();
+    const lowerText = cleanText.toLowerCase();
     
+    // Count occurrences of Môn header keywords to see if metadata is repeated per question or is a single global header
+    const monCount = (lowerText.match(/môn\s*[:\-]/g) || []).length;
+    const monHocCount = (lowerText.match(/môn\s+học\s*[:\-]/g) || []).length;
+    const hasMultipleMon = (monCount + monHocCount) >= 2;
+
     // Check if the text is structured like the user's multi-metadata block format (containing "Môn:")
-    if (lowerText.includes('môn:') || lowerText.includes('môn học:')) {
-      textBlocks = rawText.split(/(?=(?:^|\n)Môn\s*[:\-])/gi);
+    if (hasMultipleMon) {
+      textBlocks = cleanText.split(/(?=(?:^|[\r\n]+)\s*Môn\s*[:\-])/gi);
     } else {
-      textBlocks = rawText.split(/(?=(?:^|\n)Câu\s*\d+\s*[:\.])|(?=(?:^|\n)Câu\s*[:\.])/gi);
+      textBlocks = cleanText.split(/(?=(?:^|[\r\n]+)\s*Câu\s*\d+\s*[:\.])|(?=(?:^|[\r\n]+)\s*Câu\s*[:\.])/gi);
     }
 
     let extractedTitle = manualTitle;
@@ -1493,7 +1802,22 @@ export default function CreateExamPanel({
     let extractedDuration = manualDuration;
 
     // Remove empty/whitespace-only blocks
-    textBlocks = textBlocks.map(b => b.trim()).filter(b => b.length > 0);
+    textBlocks = textBlocks.map(b => b.trim()).filter(b => {
+      if (b.length === 0) return false;
+      const lowerB = b.toLowerCase();
+      if (hasMultipleMon) {
+        return lowerB.includes('môn:') || lowerB.includes('môn học:') || lowerB.includes('môn -');
+      }
+      return (
+        lowerB.includes('câu:') || 
+        lowerB.includes('câu ') || 
+        lowerB.includes('cau:') || 
+        lowerB.includes('cau ') ||
+        lowerB.includes('câu hỏi') ||
+        lowerB.includes('đáp án') ||
+        lowerB.includes('dap an')
+      );
+    });
 
     for (let idx = 0; idx < textBlocks.length; idx++) {
       const block = textBlocks[idx];
@@ -1626,7 +1950,65 @@ export default function CreateExamPanel({
         if (explainMatch) {
           explain = explainMatch[1].trim();
           for (let next = c + 1; next < lines.length; next++) {
-            explain += '\n' + lines[next];
+            const nextLine = lines[next].trim();
+            if (!nextLine) continue;
+
+            const isCh = nextLine.match(/^(?:Chương|Chuong|Chủ đề|Chu de|Chapter)\s*[:\-]\s*(.+)$/i) || nextLine.match(/^\[(?:Chương|Chuong|Chủ đề|Chu de|Chapter)\s*[:\-]\s*(.+)\]$/i);
+            const isLe = nextLine.match(/^(?:Bài học|Bài|Bài số|Lesson|Bai)\s*[:\-]\s*(.+)$/i) || nextLine.match(/^\[(?:Bài học|Bài|Bài số|Lesson|Bai)\s*[:\-]\s*(.+)\]$/i);
+            const isGr = nextLine.match(/^(?:Lớp|Khối|Grade)\s*[:\-]\s*(.+)$/i);
+            const isSu = nextLine.match(/^(?:Môn|Môn học|Subject)\s*[:\-]\s*(.+)$/i);
+            const isLv = nextLine.match(/^(?:Mức độ nhận thức|Mức độ|Muc do|Level|Mức)\s*[:\-]\s*(.+)$/i) || nextLine.match(/^\[(?:Mức độ nhận thức|Mức độ|Muc do|Level|Mức)\s*[:\-]\s*(.+)\]$/i);
+            const isTy = nextLine.match(/^(?:Dạng|Dang|Type|Hình thức|Hinh thuc)\s*[:\-]\s*(.+)$/i) || nextLine.match(/^\[(?:Dạng|Dang|Type|Hình thức|Hinh thuc)\s*[:\-]\s*(.+)\]$/i);
+            const isAns = nextLine.match(/^(?:Đáp án đúng|Đáp án|Dap an|Key)\s*[:\.=]\s*(.+)$/i);
+
+            if (isCh) {
+              blockChapterName = isCh[1].trim();
+            } else if (isLe) {
+              blockLessonName = isLe[1].trim();
+            } else if (isGr) {
+              const g = isGr[1].replace(/\D/g, '');
+              if (g) blockGrade = g;
+            } else if (isSu) {
+              const s = isSu[1].trim();
+              if (s.toLowerCase().includes('toán')) blockSubject = 'Toán';
+              else if (s.toLowerCase().includes('tin')) blockSubject = 'Tin học';
+              else blockSubject = s;
+            } else if (isLv) {
+              const lStr = isLv[1].trim().toLowerCase();
+              if (lStr.includes('nhận biết') || lStr.includes('nhan biet')) level = 'Nhận biết';
+              else if (lStr.includes('thông hiểu') || lStr.includes('thong hieu')) level = 'Thông hiểu';
+              else if (lStr.includes('vận dụng cao') || lStr.includes('vdc')) level = 'Vận dụng cao';
+              else if (lStr.includes('vận dụng') || lStr.includes('van dung')) level = 'Vận dụng';
+            } else if (isTy) {
+              const tStr = isTy[1].trim().toLowerCase();
+              if (tStr.includes('mcq') || tStr.includes('trắc nghiệm') || tStr.includes('trac nghiem')) type = 'MCQ';
+              else if (tStr.includes('đúng sai') || tStr.includes('yesno') || tStr.includes('đúng/sai') || tStr.includes('tf')) type = 'YESNO';
+              else if (tStr.includes('ngắn') || tStr.includes('short') || tStr.includes('trả lời ngắn')) type = 'SHORT';
+              else if (tStr.includes('luận') || tStr.includes('tự luận') || tStr.includes('essay')) type = 'ESSAY';
+            } else if (isAns) {
+              const rawAns = isAns[1].trim();
+              if (type === 'MCQ') {
+                const cleanAns = rawAns.toUpperCase();
+                if (cleanAns === 'A' || cleanAns === '0') answer = '0';
+                else if (cleanAns === 'B' || cleanAns === '1') answer = '1';
+                else if (cleanAns === 'C' || cleanAns === '2') answer = '2';
+                else if (cleanAns === 'D' || cleanAns === '3') answer = '3';
+                else answer = rawAns;
+              } else if (type === 'YESNO') {
+                const parts = rawAns.split(/[\s,;\/\+\|]+/);
+                const converted = parts.map(p => {
+                  const low = p.trim().toLowerCase();
+                  if (low === 'đúng' || low === 'true' || low === 't' || low === 'd' || low === 'yes') return 'true';
+                  if (low === 'sai' || low === 'false' || low === 'f' || low === 's' || low === 'no') return 'false';
+                  return low;
+                });
+                answer = converted.join(',');
+              } else {
+                answer = rawAns;
+              }
+            } else {
+              explain += '\n' + nextLine;
+            }
           }
           break; // Eat all remaining rows of this question block as explanation
         }
@@ -1647,7 +2029,23 @@ export default function CreateExamPanel({
 
       // Deduce type automatically if not explicitly provided
       if (type === 'MCQ' && options.length === 0) {
-        type = 'SHORT';
+        const lowerC = cleanContent.toLowerCase();
+        const isEssayMatch = 
+          lowerC.includes('giải thích') || 
+          lowerC.includes('nêu') || 
+          lowerC.includes('vì sao') || 
+          lowerC.includes('chứng minh') || 
+          lowerC.includes('trình bày') || 
+          lowerC.includes('định nghĩa') || 
+          lowerC.includes('viết ba nghiệm') || 
+          lowerC.includes('nghiệm tổng quát') ||
+          (answer && answer.length > 8);
+
+        if (isEssayMatch) {
+          type = 'ESSAY';
+        } else {
+          type = 'SHORT';
+        }
       } else if (type === 'MCQ' && options.length === 4) {
         const isTrueFalseContent = /đúng\s*[\/\-]\s*sai|đúng\s+hoặc\s+sai|yes\s*[\/\-]\s*no|xác định tính đúng/i.test(cleanContent);
         const isYesNo = isTrueFalseContent || options.every(
@@ -1762,7 +2160,7 @@ export default function CreateExamPanel({
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.txt')) {
+    if (!file.name.toLowerCase().endsWith('.txt')) {
       alert('Vui lòng kéo thả tệp định dạng văn bản .txt để phân tích.');
       return;
     }
@@ -2141,18 +2539,22 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
       return;
     }
 
+    if (bankSelectedChapterIds.length === 0) {
+      alert('Vui lòng chọn ít nhất một Chương hoặc Bài học trong mục "CHỌN CHƯƠNG VÀ BÀI HỌC" trước khi chọn đề!');
+      return;
+    }
+
     const uniqueLocalPool = deduplicateQuestions(questions);
 
     const filtered = uniqueLocalPool.filter((q) => {
       // match subject & grade
       if (q.subject !== bankSub || q.grade !== bankGrade) return false;
 
-      // match selected chapters
-      if (bankSelectedChapterIds.length > 0 && !bankSelectedChapterIds.includes(q.chapterId)) {
+      // STRICT CONSTRAINT: App MUST only select questions belonging to the selected chapters and lessons
+      if (!bankSelectedChapterIds.includes(q.chapterId)) {
         return false;
       }
-      // match selected lessons
-      if (bankSelectedLessonIds.length > 0 && q.lessonId && !bankSelectedLessonIds.includes(q.lessonId)) {
+      if (q.lessonId && !bankSelectedLessonIds.includes(q.lessonId)) {
         return false;
       }
 
@@ -2250,7 +2652,7 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
               lessonId,
               topic: topicName,
               type: 'YESNO',
-              content: `[Rèn luyện] Cho mệnh đề hình học không gian hoặc phương trình lượng giác: "Mọi phương trình $ax + b = 0$ đều có nghiệm duy nhất". Xét tính đúng sai của khẳng định dưới.`,
+              content: `[Rèn luyện #${i + 1}] Cho mệnh đề hình học không gian hoặc phương trình lượng giác: "Mọi phương trình $ax + b = 0$ đều có nghiệm duy nhất". Xét tính đúng sai của khẳng định dưới.`,
               options: [
                 'a) Nếu $a = 0$ và $b \\neq 0$, phương trình hoàn toàn vô nghiệm.',
                 'b) Nếu $a \\neq 0$ và $b = 0$, phương trình có nghiệm duy nhất $x = 0$.',
@@ -2302,7 +2704,126 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
           }
         } else {
           // Tin học
+          const mcqList = [
+            {
+              content: `Máy tính Pascaline được sáng chế bởi nhà khoa học Blaise Pascal vào thế kỷ nào?`,
+              options: [`Thế kỷ XVII (Năm 1642)`, `Thế kỷ XVIII`, `Thế kỷ XIX`, `Thế kỷ XX`],
+              answer: 'A',
+              explain: 'Pascaline được nhà toán học Blaise Pascal sáng chế năm 1642 (thuộc thế kỷ XVII).'
+            },
+            {
+              content: `Ai là người được coi là "cha đẻ của công nghệ máy tính" nhờ thiết kế ra Máy sai phân (Difference Engine) và Máy phân tích (Analytical Engine)?`,
+              options: [`Charles Babbage`, `Blaise Pascal`, `Alan Turing`, `Ada Lovelace`],
+              answer: 'A',
+              explain: 'Charles Babbage đã thiết kế Máy sai phân và Máy phân tích, đặt nền móng cho máy tính hiện đại.'
+            },
+            {
+              content: `Thế hệ máy tính thứ hai (1955 - 1965) sử dụng linh kiện điện tử lõi nào sau đây?`,
+              options: [`Bóng bán dẫn (Transistor)`, `Bóng chân không`, `Vi mạch tích hợp (IC)`, `Bộ vi xử lý siêu lớn (VLSI)`],
+              answer: 'A',
+              explain: 'Thế hệ thứ nhất dùng bóng chân không; thế hệ thứ hai dùng bóng bán dẫn.'
+            },
+            {
+              content: `Đặc điểm nổi bật nào dưới đây KHÔNG phải của thông tin số?`,
+              options: [`Khó sao chép và khó truyền bá đi xa`, `Dễ dàng được nhân bản và chia sẻ`, `Có thể bị chỉnh sửa, làm giả dễ dàng`, `Lưu trữ với dung lượng cực lớn`],
+              answer: 'A',
+              explain: 'Thông tin số cực kỳ dễ sao chép, lưu trữ và truyền bá thông qua mạng Internet.'
+            },
+            {
+              content: `Để đánh giá độ tin cậy của thông tin trên mạng, ta nên thực hiện tiêu chí nào?`,
+              options: [`Kiểm tra nguồn tin, tác giả, tính cập nhật và đối chiếu chéo`, `Chỉ tin vào bài viết có nhiều lượt thích (Like)`, `Chỉ đọc tiêu đề giật gân`, `Tin ngay vào bài chia sẻ trên mạng xã hội`],
+              answer: 'A',
+              explain: 'Cần kiểm tra nguồn gốc, tác giả uy tín, ngày đăng tải và đối chiếu chéo các thông tin độc lập.'
+            },
+            {
+              content: `Trong phần mềm bảng tính Excel, nút lệnh dùng để lọc dữ liệu tự động có biểu tượng hình gì?`,
+              options: [`Cái phễu (Filter)`, `Kính lúp`, `Biểu đồ cột`, `Dấu cộng`],
+              answer: 'A',
+              explain: 'Nút Filter trong Excel có hình chiếc phễu lọc để hiển thị các hàng dữ liệu thỏa mãn điều kiện.'
+            },
+            {
+              content: `Khi thiết kế một thuật toán lặp với số lần chưa biết trước, ta cần xác định rõ điều kiện gì?`,
+              options: [`Điều kiện dừng để tránh lặp vô hạn`, `Số lần lặp cố định trước`, `Tên biến đếm bắt buộc`, `Hằng số lặp`],
+              answer: 'A',
+              explain: 'Thuật toán lặp chưa biết trước cần xác định rõ điều kiện để dừng lặp, tránh rơi vào vòng lặp vô tận.'
+            },
+            {
+              content: `Bản quyền phần mềm (Software Copyright) bảo vệ quyền lợi hợp pháp của đối tượng nào?`,
+              options: [`Tác giả hoặc nhà phát triển phần mềm`, `Người mua đĩa CD phần mềm`, `Học sinh đang thực hành máy tính`, `Cơ quan quản lý Internet`],
+              answer: 'A',
+              explain: 'Bản quyền phần mềm bảo vệ quyền sở hữu trí tuệ của tác giả hoặc tổ chức phát triển phần mềm.'
+            }
+          ];
+
+          const yesnoList = [
+            {
+              content: `[Nhận định] Hãy nhận định tính đúng/sai của các thông cáo về hệ nhị phân và hệ đếm trong xử lý phần cứng máy tính:`,
+              options: [
+                'a) Hệ nhị phân chỉ sử dụng hai ký tự chữ số là 0 và 1.',
+                'b) Một Byte dữ liệu chuẩn tương đương với 10 bít nhị phân cơ bản.',
+                'c) Hệ thập lục phân (Hexadecimal) hỗ trợ biểu diễn gọn gàng hơn cho các chuỗi nhị phân dài.',
+                'd) RAM mất toàn bộ dữ liệu lưu trữ khi ngắt nguồn điện cấp.'
+              ],
+              answer: 'true,false,true,true',
+              explain: 'Một byte chuẩn tương đương với 8 bit nhị phân chứ không phải 10 bit.'
+            },
+            {
+              content: `[Nhận định] Cho các khẳng định về an toàn thông tin và văn hóa ứng xử trên không gian mạng:`,
+              options: [
+                'a) Học sinh có quyền tự do tuyệt đối đăng tải hình ảnh riêng tư của người khác không cần xin phép.',
+                'b) Mật khẩu mạnh nên chứa cả chữ hoa, chữ thường, chữ số và ký hiệu đặc biệt.',
+                'c) Việc sử dụng phần mềm bẻ khóa (crack) là hành vi tôn trọng quyền tác giả.',
+                'd) Khi phát hiện bị bắt nạt trên mạng, nên báo ngay cho thầy cô, cha mẹ hoặc cơ quan chức năng.'
+              ],
+              answer: 'false,true,false,true',
+              explain: 'Không đăng tải ảnh riêng tư của người khác khi chưa xin phép. Phần mềm bẻ khóa vi phạm bản quyền.'
+            },
+            {
+              content: `[Nhận định] Xét các mệnh đề sau liên quan đến kỹ thuật soạn thảo văn bản và phần mềm trình chiếu:`,
+              options: [
+                'a) Phần mềm trình chiếu chỉ hỗ trợ chèn văn bản, không thể chèn video hay âm thanh.',
+                'b) Nên sử dụng màu chữ tương phản cao với màu nền của trang chiếu để người xem dễ đọc.',
+                'c) Mục "Header and Footer" trong Word giúp tạo tiêu đề đầu và chân trang tự động lặp lại.',
+                'd) Mọi trang slide trình chiếu bắt buộc phải có dung lượng chữ trên 500 từ mới đạt chuẩn.'
+              ],
+              answer: 'false,true,true,false',
+              explain: 'Trình chiếu có thể chèn đa phương tiện. Không nên viết quá nhiều chữ lên slide.'
+            }
+          ];
+
+          const shortList = [
+            {
+              content: `Hãy đổi số thập phân 13 sang hệ nhị phân thuần túy biểu diễn trong máy tính (nhập chuỗi gồm các chữ số 0 và 1 viết liền).`,
+              answer: '1101',
+              explain: 'Chia liên tiếp cho 2 lấy số dư ngược từ dưới lên: 13/2=6 dư 1, 6/2=3 dư 0, 3/2=1 dư 1, 1/2=0 dư 1. Kết quả là 1101.'
+            },
+            {
+              content: `Trong phần mềm bảng tính Excel, tên hàm dùng để tính tổng các giá trị trong một phạm vi là gì? (Nhập tên hàm bằng chữ in hoa).`,
+              answer: 'SUM',
+              explain: 'Hàm SUM dùng để tính tổng các ô dữ liệu được chỉ định.'
+            },
+            {
+              content: `Trong phần mềm bảng tính Excel, tên hàm dùng để tìm giá trị lớn nhất trong một phạm vi là gì? (Nhập tên hàm bằng chữ in hoa).`,
+              answer: 'MAX',
+              explain: 'Hàm MAX trả về giá trị lớn nhất trong dãy dữ liệu.'
+            }
+          ];
+
+          const essayList = [
+            {
+              content: `Trình bày nguyên lý hoạt động của kiến trúc Von Neumann và vai trò cụ thể của Bộ nhớ trong máy tính hiện đại.`,
+              answer: 'Nêu rõ cấu trúc gồm: CPU (ALU, CU), Bộ nhớ, Thiết bị vào/ra, và nguyên lý lưu trữ chương trình.',
+              explain: 'Học sinh cần trình bày đủ 3 thành phần chính của kiến trúc Von Neumann và giải thích cơ chế chu trình Nạp - Giải mã - Thực thi.'
+            },
+            {
+              content: `Phân tích tác động tích cực và tiêu cực của Internet và mạng xã hội đối với việc học tập và cuộc sống của học sinh THCS hiện nay.`,
+              answer: 'Tích cực: Học tập trực tuyến, cập nhật kiến thức, kết nối bạn bè. Tiêu cực: Gây nghiện, xao nhãng học tập, rủi ro lừa đảo.',
+              explain: 'Học sinh cần đưa ra lập luận đa chiều, liên hệ thực tế bản thân và gia đình để làm nổi bật luận điểm.'
+            }
+          ];
+
           if (type === 'MCQ') {
+            const item = mcqList[i % mcqList.length];
             generatedQs.push({
               id,
               grade: bankGrade,
@@ -2312,15 +2833,16 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
               lessonId,
               topic: topicName,
               type: 'MCQ',
-              content: `[Đề xuất] Thuật toán tìm kiếm nhị phân (Binary Search) có độ phức tạp thời gian trung bình thuộc nhóm nào sau đây?`,
-              options: [`$O(\\log n)$`, `$O(n)$`, `$O(n \\log n)$`, `$O(n^2)$`],
-              answer: '0',
-              explain: 'Tìm kiếm nhị phân chia đôi dãy tìm kiếm ở mỗi bước nên độ phức tạp là Logarithmic thời gian.',
+              content: `[Rèn luyện #${i + 1}] ` + item.content,
+              options: item.options,
+              answer: item.answer,
+              explain: item.explain,
               level,
               source: 'Hệ thống biên soạn',
               status: 'Đã duyệt',
             });
           } else if (type === 'YESNO') {
+            const item = yesnoList[i % yesnoList.length];
             generatedQs.push({
               id,
               grade: bankGrade,
@@ -2330,20 +2852,16 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
               lessonId,
               topic: topicName,
               type: 'YESNO',
-              content: `[Đề xuất] Hãy nhận định tính đúng/sai của các thông cáo về hệ nhị phân và hệ đếm trong xử lý phần cứng máy tính:`,
-              options: [
-                'a) Hệ nhị phân chỉ sử dụng hai ký tự chữ số là 0 và 1.',
-                'b) Một Byte dữ liệu chuẩn tương đương với 10 bít nhị phân cơ bản.',
-                'c) Hệ thập lục phân (Hexadecimal) hỗ trợ biểu diễn gọn gàng hơn cho các chuỗi nhị phân dài.',
-                'd) RAM mất toàn bộ dữ liệu lưu trữ khi ngắt nguồn điện cấp.',
-              ],
-              answer: 'true,false,true,true',
-              explain: 'Một byte chuẩn tương đương với 8 bit nhị phân chứ không phải 10 bit.',
+              content: `[Rèn luyện #${i + 1}] ` + item.content,
+              options: item.options,
+              answer: item.answer,
+              explain: item.explain,
               level,
               source: 'Hệ thống biên soạn',
               status: 'Đã duyệt',
             });
           } else if (type === 'SHORT') {
+            const item = shortList[i % shortList.length];
             generatedQs.push({
               id,
               grade: bankGrade,
@@ -2353,15 +2871,16 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
               lessonId,
               topic: topicName,
               type: 'SHORT',
-              content: `[Đề xuất] Hãy đổi số thập phân 13 sang hệ nhị phân thuần túy biểu diễn trong máy tính (nhập chuỗi không dấu cách).`,
+              content: `[Rèn luyện #${i + 1}] ` + item.content,
               options: [],
-              answer: '1101',
-              explain: 'Chia liên tiếp cho 2 lấy số dư ngược từ dưới lên: 13/2=6 dư 1, 6/2=3 dư 0, 3/2=1 dư 1, 1/2=0 dư 1. Kết quả là 1101.',
+              answer: item.answer,
+              explain: item.explain,
               level,
               source: 'Hệ thống biên soạn',
               status: 'Đã duyệt',
             });
           } else {
+            const item = essayList[i % essayList.length];
             generatedQs.push({
               id,
               grade: bankGrade,
@@ -2371,10 +2890,10 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
               lessonId,
               topic: topicName,
               type: 'ESSAY',
-              content: `[Đề xuất/Tự luận] Trình bày nguyên lý hoạt động của kiến trúc Von Neumann và vai trò cụ thể của Bộ nhớ trong máy tính hiện đại.`,
+              content: `[Rèn luyện #${i + 1}] ` + item.content,
               options: [],
-              answer: 'Nêu rõ cấu trúc gồm: CPU (ALU, CU), Bộ nhớ, Thiết bị vào/ra, và nguyên lý lưu trữ chương trình.',
-              explain: 'Học sinh cần trình bày đủ 3 thành phần chính của kiến trúc Von Neumann và giải thích cơ chế chu trình Nạp - Giải mã - Thực thi.',
+              answer: item.answer,
+              explain: item.explain,
               level,
               source: 'Hệ thống biên soạn',
               status: 'Đã duyệt',
@@ -2903,6 +3422,24 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
+                      onClick={() => handleDeduplicateExamQuestions('matrix')}
+                      className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-black rounded-lg flex items-center gap-1 cursor-pointer"
+                      title="Quét và thay đổi các câu hỏi trùng lặp trong đề bằng câu hỏi mới không trùng"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-amber-600" />
+                      Lọc câu trùng
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isAuditing}
+                      onClick={() => handleVerifyKnowledge('matrix')}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-md flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" />
+                      {isAuditing ? 'AI Đang thẩm định...' : 'Thẩm định kiến thức (AI)'}
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleSaveToBankSubmit}
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1 cursor-pointer"
                     >
@@ -2946,6 +3483,24 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                         </div>
                       </div>
 
+                      {auditResults[q.id] && (
+                        <div className={`p-3 rounded-lg border text-xs leading-relaxed font-bold my-2 ${
+                          auditResults[q.id].isCorrect 
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                            : auditResults[q.id].issueType === 'error'
+                            ? 'bg-rose-50 text-rose-800 border-rose-200 animate-pulse'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`w-2 h-2 rounded-full ${auditResults[q.id].isCorrect ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                            <span className="uppercase text-[9px] font-black tracking-wider">
+                              AI Thẩm định kết cấu kiến thức:
+                            </span>
+                          </div>
+                          <p>{auditResults[q.id].feedback}</p>
+                        </div>
+                      )}
+
                       <p className="text-sm font-semibold text-slate-800 leading-relaxed">
                         <MathText text={q.content} />
                       </p>
@@ -2954,7 +3509,7 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
                           {q.options.slice(0, 4).map((opt, oIdx) => (
                             <div key={oIdx} className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                              <strong className="text-slate-800">{['A', 'B', 'C', 'D'][oIdx]}.</strong> <MathText text={opt} />
+                              <strong className="text-slate-800">{['A', 'B', 'C', 'D'][oIdx]}.</strong> <MathText text={cleanOptionPrefix(opt, oIdx, 'MCQ')} />
                             </div>
                           ))}
                         </div>
@@ -2968,7 +3523,7 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                               className="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between"
                             >
                               <span>
-                                <strong className="text-slate-800">{['a', 'b', 'c', 'd'][oIdx]})</strong> <MathText text={opt} />
+                                <strong className="text-slate-800">{['a', 'b', 'c', 'd'][oIdx]})</strong> <MathText text={cleanOptionPrefix(opt, oIdx, 'YESNO')} />
                               </span>
                               <span className="text-[10px] font-bold text-emerald-600 uppercase">Mệnh đề Đúng / Sai</span>
                             </div>
@@ -3385,6 +3940,25 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                       <Save className="w-3.5 h-3.5" />
                       Lưu & Đồng bộ Kho chung
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeduplicateExamQuestions('manual')}
+                      disabled={manualQuestions.length === 0}
+                      className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-black rounded-xl flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      title="Quét và loại bỏ các câu hỏi trùng lặp trong đề đang soạn"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-amber-600" />
+                      Lọc câu trùng
+                    </button>
+                    <button
+                      type="button"
+                      disabled={manualQuestions.length === 0 || isAuditing}
+                      onClick={() => handleVerifyKnowledge('manual')}
+                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" />
+                      {isAuditing ? 'AI Đang thẩm định...' : 'Thẩm định kiến thức (AI)'}
+                    </button>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -3536,6 +4110,18 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                             </span>
                           </div>
 
+                          {auditResults[q.id] && (
+                            <div className="mt-2 p-3 rounded-lg border text-xs leading-relaxed font-bold w-full bg-slate-50 text-slate-700 border-slate-200">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`w-2 h-2 rounded-full ${auditResults[q.id].isCorrect ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                                <span className="uppercase text-[9px] font-black tracking-wider text-slate-500">
+                                  AI Thẩm định kết cấu kiến thức:
+                                </span>
+                              </div>
+                              <p className={auditResults[q.id].isCorrect ? "text-emerald-700" : "text-amber-700"}>{auditResults[q.id].feedback}</p>
+                            </div>
+                          )}
+
                           {/* Reorganization layout switches */}
                           <div className="flex items-center gap-1 shadow-sm rounded-lg bg-slate-50 border p-1">
                             <button
@@ -3589,7 +4175,7 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                                 className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100"
                               >
                                 <strong className="text-slate-800">{['A', 'B', 'C', 'D'][oIdx]}.</strong>{' '}
-                                <MathText text={opt} />
+                                <MathText text={cleanOptionPrefix(opt, oIdx, 'MCQ')} />
                               </div>
                             ))}
                           </div>
@@ -3604,7 +4190,7 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                               >
                                 <span>
                                   <strong className="text-slate-800">{['a', 'b', 'c', 'd'][oIdx]})</strong>{' '}
-                                  <MathText text={opt} />
+                                  <MathText text={cleanOptionPrefix(opt, oIdx, 'YESNO')} />
                                 </span>
                                 <span className="text-[10px] font-bold text-indigo-600">Đúng / Sai</span>
                               </div>
@@ -3998,12 +4584,11 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                       // match subject & grade
                       if (q.subject !== bankSub || q.grade !== bankGrade) return false;
 
-                      // match selected chapters
-                      if (bankSelectedChapterIds.length > 0 && !bankSelectedChapterIds.includes(q.chapterId)) {
+                      // STRICT CONSTRAINT: App MUST only select questions belonging to the selected chapters and lessons
+                      if (!bankSelectedChapterIds.includes(q.chapterId)) {
                         return false;
                       }
-                      // match selected lessons
-                      if (bankSelectedLessonIds.length > 0 && q.lessonId && !bankSelectedLessonIds.includes(q.lessonId)) {
+                      if (q.lessonId && !bankSelectedLessonIds.includes(q.lessonId)) {
                         return false;
                       }
 
@@ -4077,7 +4662,7 @@ Lời giải: Gọi số học sinh đi dã ngoại là x (học sinh), với x 
                             <div className="grid grid-cols-2 gap-1.5 pt-1">
                               {q.options.slice(0, 4).map((opt, oIdx) => (
                                 <div key={oIdx} className="p-1 px-2 bg-slate-50 rounded border border-slate-100 text-[10px] text-slate-500">
-                                  <strong>{['A', 'B', 'C', 'D'][oIdx]}.</strong> <MathText text={opt} />
+                                  <strong>{q.type === 'YESNO' ? ['a', 'b', 'c', 'd'][oIdx] + ')' : ['A', 'B', 'C', 'D'][oIdx] + '.'}</strong> <MathText text={cleanOptionPrefix(opt, oIdx, q.type)} />
                                 </div>
                               ))}
                             </div>
