@@ -296,34 +296,21 @@ export default function App() {
     const isLocalOrPre = window.location.hostname === 'localhost' || window.location.hostname.includes('.run.app');
     const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_sync_db';
 
-    if (action === 'write' && payloadToSave) {
-      // 1. Try to post to Express backend if on supported host
-      if (isLocalOrPre) {
+    if (isLocalOrPre) {
+      // 1. In AI Studio container: ONLY use Express backend to avoid network security sandbox issues with external domains
+      if (action === 'write' && payloadToSave) {
         try {
           const res = await fetch('/api/sync-state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payloadToSave)
           });
-          if (res.ok) return;
+          return res.ok;
         } catch (err) {
-          console.warn('Express sync failed, falling back to public KV store...', err);
+          console.warn('Express sync failed in App.tsx:', err);
+          return false;
         }
-      }
-
-      // 2. Fallback to public cloud KV store (handles Vercel and GitHub Pages static servers)
-      try {
-        await fetch(KV_URL, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payloadToSave)
-        });
-      } catch (err) {
-        console.error('Public KV sync failed:', err);
-      }
-    } else if (action === 'read') {
-      // 1. Try to fetch from Express backend if on supported host
-      if (isLocalOrPre) {
+      } else if (action === 'read') {
         try {
           const res = await fetch('/api/sync-state');
           if (res.ok) {
@@ -333,19 +320,33 @@ export default function App() {
             }
           }
         } catch (err) {
-          console.warn('Express fetch failed, falling back to public KV store...', err);
+          console.warn('Express fetch failed in App.tsx:', err);
         }
       }
-
-      // 2. Fallback to public cloud KV store (handles Vercel and GitHub Pages static servers)
-      try {
-        const res = await fetch(KV_URL);
-        if (res.ok) {
-          const db = await res.json();
-          return db;
+    } else {
+      // 2. On Vercel / GitHub Pages: ONLY use public cloud KVdb
+      if (action === 'write' && payloadToSave) {
+        try {
+          const res = await fetch(KV_URL, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadToSave)
+          });
+          return res.ok;
+        } catch (err) {
+          console.error('Public KV sync failed in App.tsx:', err);
+          return false;
         }
-      } catch (err) {
-        console.error('Public KV fetch failed:', err);
+      } else if (action === 'read') {
+        try {
+          const res = await fetch(KV_URL);
+          if (res.ok) {
+            const db = await res.json();
+            return db;
+          }
+        } catch (err) {
+          console.error('Public KV fetch failed in App.tsx:', err);
+        }
       }
     }
     return null;

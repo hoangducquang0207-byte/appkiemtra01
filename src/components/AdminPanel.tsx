@@ -342,10 +342,10 @@ export default function AdminPanel({
       }
       
       const isLocalOrPre = window.location.hostname === 'localhost' || window.location.hostname.includes('.run.app');
-      let expressSuccess = false;
+      let success = false;
 
-      // 1. Try syncing to Express first if supported
       if (isLocalOrPre) {
+        // AI Studio Container: ONLY hit Express, never make outbound requests to kvdb.io to prevent security sandbox blocks
         try {
           const res = await fetch('/api/sync-state', {
             method: 'POST',
@@ -353,23 +353,30 @@ export default function AdminPanel({
             body: JSON.stringify(payload)
           });
           if (res.ok) {
-            expressSuccess = true;
+            success = true;
           }
         } catch (e) {
-          console.warn('Express sync failed in AdminPanel, trying KV fallback...');
+          console.error('Express sync failed in AdminPanel:', e);
+        }
+      } else {
+        // Vercel / GitHub Pages: ONLY hit public cloud KVdb
+        try {
+          const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_sync_db';
+          const resKv = await fetch(KV_URL, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (resKv.ok) {
+            success = true;
+          }
+        } catch (e) {
+          console.error('KV sync failed in AdminPanel:', e);
         }
       }
 
-      // 2. Always write to public cloud KV store for double durability (essential for Vercel/GitHub Pages)
-      const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_sync_db';
-      const resKv = await fetch(KV_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (resKv.ok || expressSuccess) {
-        showLocalToast('✔ ĐÃ ĐỒNG BỘ: Toàn bộ Cấu trình học trình, câu hỏi, mật khẩu giáo viên đã đồng bộ đám mây thành công!');
+      if (success) {
+        showLocalToast('✔ ĐÃ ĐỒNG BỘ THÀNH CÔNG: Toàn bộ Cấu trình học trình, ngân hàng đề và tài khoản giáo viên đã đồng bộ đám mây!');
       } else {
         showLocalToast('Lỗi khi truyền đồng bộ đám mây!');
       }
