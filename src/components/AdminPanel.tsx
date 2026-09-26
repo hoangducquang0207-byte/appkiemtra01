@@ -70,9 +70,8 @@ export default function AdminPanel({
   const [activeTab, setActiveTab] = useState<AdminTab>('teachers');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
-  const sharedDbId = localStorage.getItem('quickquiz-shared-db-id');
   const origin = window.location.origin;
-  const sharedSyncLink = sharedDbId ? `${origin}/?db=${sharedDbId}` : '';
+  const sharedSyncLink = `${origin}/`;
 
   const handleCopySharedLink = () => {
     if (!sharedSyncLink) return;
@@ -371,40 +370,20 @@ export default function AdminPanel({
           console.error('Express sync failed in AdminPanel:', e);
         }
       } else {
-        // Vercel / GitHub Pages: ONLY hit public cloud npoint.io
+        // Vercel / GitHub Pages: Connect to central, fixed public KVDB store
         try {
-          let dbId = localStorage.getItem('quickquiz-shared-db-id');
-          if (!dbId) {
-            // Create a new npoint.io bin
-            const res = await fetch('https://api.npoint.io', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-              const resData = await res.json();
-              if (resData && resData.id) {
-                localStorage.setItem('quickquiz-shared-db-id', resData.id);
-                success = true;
-              }
-            }
-          } else {
-            // Update existing npoint.io bin
-            const res = await fetch(`https://api.npoint.io/${dbId}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-              success = true;
-            }
+          const res = await fetch('https://kvdb.io/kb098f950bcd14424d9951/quickquiz_hoangquang_db', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            success = true;
           }
         } catch (e) {
-          console.error('Npoint sync failed in AdminPanel:', e);
+          console.error('KVDB sync failed in AdminPanel:', e);
         }
       }
 
