@@ -337,31 +337,30 @@ export default function App() {
         }
       }
     } else {
-      // 2. On Vercel / GitHub Pages: ONLY use public cloud npoint.io
-      const dbId = localStorage.getItem('quickquiz-shared-db-id');
-      if (!dbId) return null;
+      // 2. On Vercel / GitHub Pages: Connect to central, fixed public KVDB store
+      const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_hoangquang_db';
 
       if (action === 'write' && payloadToSave) {
         try {
-          const res = await fetch(`https://api.npoint.io/${dbId}`, {
+          const res = await fetch(KV_URL, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payloadToSave)
           });
           return res.ok;
         } catch (err) {
-          console.error('Public npoint sync failed in App.tsx:', err);
+          console.error('Public KV sync failed in App.tsx:', err);
           return false;
         }
       } else if (action === 'read') {
         try {
-          const res = await fetch(`https://api.npoint.io/${dbId}`);
+          const res = await fetch(KV_URL);
           if (res.ok) {
             const db = await res.json();
             return db;
           }
         } catch (err) {
-          console.error('Public npoint fetch failed in App.tsx:', err);
+          console.error('Public KV fetch failed in App.tsx:', err);
         }
       }
     }
