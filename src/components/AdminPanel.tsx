@@ -69,6 +69,18 @@ export default function AdminPanel({
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>('teachers');
   const [searchQuery, setSearchQuery] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const sharedDbId = localStorage.getItem('quickquiz-shared-db-id');
+  const origin = window.location.origin;
+  const sharedSyncLink = sharedDbId ? `${origin}/?db=${sharedDbId}` : '';
+
+  const handleCopySharedLink = () => {
+    if (!sharedSyncLink) return;
+    navigator.clipboard.writeText(sharedSyncLink);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+    showLocalToast('✔ Đã sao chép liên kết đồng bộ thành công!');
+  };
   
   // Teacher management states
   const [isAddingTeacher, setIsAddingTeacher] = useState(false);
@@ -345,7 +357,7 @@ export default function AdminPanel({
       let success = false;
 
       if (isLocalOrPre) {
-        // AI Studio Container: ONLY hit Express, never make outbound requests to kvdb.io to prevent security sandbox blocks
+        // AI Studio Container: ONLY hit Express, never make outbound requests to prevent security sandbox blocks
         try {
           const res = await fetch('/api/sync-state', {
             method: 'POST',
@@ -359,24 +371,49 @@ export default function AdminPanel({
           console.error('Express sync failed in AdminPanel:', e);
         }
       } else {
-        // Vercel / GitHub Pages: ONLY hit public cloud KVdb
+        // Vercel / GitHub Pages: ONLY hit public cloud npoint.io
         try {
-          const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_sync_db';
-          const resKv = await fetch(KV_URL, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (resKv.ok) {
-            success = true;
+          let dbId = localStorage.getItem('quickquiz-shared-db-id');
+          if (!dbId) {
+            // Create a new npoint.io bin
+            const res = await fetch('https://api.npoint.io', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+              const resData = await res.json();
+              if (resData && resData.id) {
+                localStorage.setItem('quickquiz-shared-db-id', resData.id);
+                success = true;
+              }
+            }
+          } else {
+            // Update existing npoint.io bin
+            const res = await fetch(`https://api.npoint.io/${dbId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+              success = true;
+            }
           }
         } catch (e) {
-          console.error('KV sync failed in AdminPanel:', e);
+          console.error('Npoint sync failed in AdminPanel:', e);
         }
       }
 
       if (success) {
         showLocalToast('✔ ĐÃ ĐỒNG BỘ THÀNH CÔNG: Toàn bộ Cấu trình học trình, ngân hàng đề và tài khoản giáo viên đã đồng bộ đám mây!');
+        // Reload to update share links immediately
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       } else {
         showLocalToast('Lỗi khi truyền đồng bộ đám mây!');
       }
@@ -991,6 +1028,39 @@ Giáo viên chủ nhiệm` : '';
               Đồng bộ dữ liệu ngay
             </button>
           </div>
+
+          {sharedSyncLink && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3 shadow-xs">
+              <div className="space-y-1">
+                <h4 className="text-sm font-black text-emerald-900 flex items-center gap-1.5 uppercase">
+                  <Share2 className="w-4 h-4 text-emerald-700" />
+                  Đường liên kết chia sẻ đồng bộ toàn diện
+                </h4>
+                <p className="text-[11px] text-emerald-800 leading-normal font-medium">
+                  Hãy gửi liên kết đặc biệt này cho toàn bộ giáo viên và học sinh trong trường. Chỉ cần họ <strong>nhấp chuột mở liên kết này một lần</strong>, ứng dụng của họ sẽ tự động được kết nối và đồng bộ vĩnh viễn với Cấu trình học trình, danh sách lớp học và tài khoản mà thầy đã thiết lập trên đám mây!
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={sharedSyncLink}
+                  className="flex-1 bg-white border border-emerald-200 text-emerald-950 font-mono text-[11px] px-3 py-2.5 rounded-lg select-all"
+                />
+                <button
+                  onClick={handleCopySharedLink}
+                  type="button"
+                  className={`px-4 py-2.5 rounded-lg text-xs font-black shrink-0 transition-all uppercase flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                    copiedLink ? 'bg-emerald-600 text-white' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300'
+                  }`}
+                >
+                  {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copiedLink ? 'Đã sao chép' : 'Sao chép liên kết'}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Share with teachers */}
