@@ -25,6 +25,29 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
   const [showStudentPass, setShowStudentPass] = useState(false);
   const [errorText, setErrorText] = useState('');
 
+  // Hidden admin entrance states (URL parameter admin=true or click logo 5 times)
+  const [isAdminTabVisible, setIsAdminTabVisible] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.has('admin') || params.get('admin') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [logoClicks, setLogoClicks] = useState(0);
+
+  const handleLogoClick = () => {
+    setLogoClicks((prev) => {
+      const next = prev + 1;
+      if (next >= 5) {
+        setIsAdminTabVisible(true);
+        setSelectedRole('admin'); // Auto focus admin tab for the owner
+        return 0;
+      }
+      return next;
+    });
+  };
+
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorText('');
@@ -132,9 +155,14 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
         {/* Core application title branding */}
         <div className="text-center space-y-3 mb-8">
           <div className="flex justify-center">
-            <div className="p-3 bg-gradient-to-tr from-emerald-500 via-teal-500 to-green-500 rounded-2xl shadow-xl border border-emerald-400/20 animate-transform hover:rotate-12 duration-300">
+            <button
+              type="button"
+              onClick={handleLogoClick}
+              title="QuickQuiz Award"
+              className="p-3 bg-gradient-to-tr from-emerald-500 via-teal-500 to-green-500 rounded-2xl shadow-xl border border-emerald-400/20 animate-transform hover:rotate-12 duration-300 cursor-pointer focus:outline-hidden"
+            >
               <Award className="w-8 h-8 text-white" />
-            </div>
+            </button>
           </div>
           <h1 className="text-xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-green-300 uppercase leading-snug">
             KIỂM TRA TRẮC NGHIỆM & TỰ LUẬN
@@ -149,7 +177,7 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
           <label className="text-xs font-black text-slate-400 uppercase tracking-wider block">
             Chọn phân mục vai trò truy cập:
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className={`grid ${isAdminTabVisible ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
             {/* Giáo viên */}
             <button
               type="button"
@@ -179,18 +207,20 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
             </button>
 
             {/* Admin */}
-            <button
-              type="button"
-              onClick={() => selectRole('admin')}
-              className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 ${
-                selectedRole === 'admin'
-                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-md shadow-emerald-500/5'
-                  : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-              }`}
-            >
-              <Shield className="w-5 h-5" />
-              <span className="text-[11px] font-black tracking-wide uppercase">Hệ thống</span>
-            </button>
+            {isAdminTabVisible && (
+              <button
+                type="button"
+                onClick={() => selectRole('admin')}
+                className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 ${
+                  selectedRole === 'admin'
+                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-md shadow-emerald-500/5'
+                    : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                }`}
+              >
+                <Shield className="w-5 h-5" />
+                <span className="text-[11px] font-black tracking-wide uppercase">Hệ thống</span>
+              </button>
+            )}
           </div>
         </div>
 
