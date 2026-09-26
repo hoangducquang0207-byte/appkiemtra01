@@ -171,6 +171,20 @@ export default function App() {
 
   // Initial Load
   useEffect(() => {
+    // Check for "db" parameter to register shared database instantly
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlDbId = params.get('db');
+      if (urlDbId && urlDbId.trim().length > 5) {
+        localStorage.setItem('quickquiz-shared-db-id', urlDbId.trim());
+        // Clean URL parameter to keep it clean and beautiful
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    } catch (e) {
+      console.warn('URLSearchParams error:', e);
+    }
+
     try {
       const data = localStorage.getItem(APP_ID);
       if (data) {
@@ -294,7 +308,6 @@ export default function App() {
   // Helper to sync state to/from server DB or public cloud KV database (e.g. on Vercel/GitHub Pages)
   const syncWithServerDb = async (action: 'read' | 'write', payloadToSave?: any) => {
     const isLocalOrPre = window.location.hostname === 'localhost' || window.location.hostname.includes('.run.app');
-    const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_sync_db';
 
     if (isLocalOrPre) {
       // 1. In AI Studio container: ONLY use Express backend to avoid network security sandbox issues with external domains
@@ -324,28 +337,31 @@ export default function App() {
         }
       }
     } else {
-      // 2. On Vercel / GitHub Pages: ONLY use public cloud KVdb
+      // 2. On Vercel / GitHub Pages: ONLY use public cloud npoint.io
+      const dbId = localStorage.getItem('quickquiz-shared-db-id');
+      if (!dbId) return null;
+
       if (action === 'write' && payloadToSave) {
         try {
-          const res = await fetch(KV_URL, {
+          const res = await fetch(`https://api.npoint.io/${dbId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payloadToSave)
           });
           return res.ok;
         } catch (err) {
-          console.error('Public KV sync failed in App.tsx:', err);
+          console.error('Public npoint sync failed in App.tsx:', err);
           return false;
         }
       } else if (action === 'read') {
         try {
-          const res = await fetch(KV_URL);
+          const res = await fetch(`https://api.npoint.io/${dbId}`);
           if (res.ok) {
             const db = await res.json();
             return db;
           }
         } catch (err) {
-          console.error('Public KV fetch failed in App.tsx:', err);
+          console.error('Public npoint fetch failed in App.tsx:', err);
         }
       }
     }
