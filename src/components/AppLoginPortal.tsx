@@ -76,7 +76,7 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
       }
 
       // Find classes matching class password
-      const matchedClasses = classes.filter(c => c.joinPass.trim() === classPass);
+      const matchedClasses = classes.filter(c => c.joinPass.trim().toLowerCase() === classPass.trim().toLowerCase());
       if (matchedClasses.length === 0) {
         setErrorText('Mật khẩu lớp chưa chính xác! Vui lòng kiểm tra lại.');
         return;
@@ -87,8 +87,8 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
 
       for (const c of matchedClasses) {
         const student = c.students.find(s => {
-          const expectedPass = (s.password || generateStudentPassword(s.name)).trim();
-          return expectedPass === studentPass;
+          const expectedPass = (s.password || generateStudentPassword(s.name)).trim().toLowerCase();
+          return expectedPass === studentPass.trim().toLowerCase();
         });
         if (student) {
           foundClass = c;
@@ -330,6 +330,9 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
                     }}
                     autoFocus
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck="false"
                     placeholder="Nhập mật khẩu lớp học..."
                     className="w-full pl-3 pr-10 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl focus:outline-hidden focus:border-emerald-500 font-mono text-sm tracking-widest placeholder:text-slate-600 placeholder:tracking-normal placeholder:font-sans transition-all"
                   />
@@ -357,6 +360,9 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
                       setErrorText('');
                     }}
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck="false"
                     placeholder="Nhập mật khẩu cá nhân học sinh..."
                     className="w-full pl-3 pr-10 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl focus:outline-hidden focus:border-emerald-500 font-mono text-sm tracking-widest placeholder:text-slate-600 placeholder:tracking-normal placeholder:font-sans transition-all"
                   />
@@ -384,6 +390,9 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
                   }}
                   autoFocus
                   required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                   placeholder="Nhập email giáo viên..."
                   className="w-full pl-3 pr-10 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl focus:outline-hidden focus:border-emerald-500 text-xs font-semibold"
                 />
@@ -400,6 +409,9 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
                       setErrorText('');
                     }}
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck="false"
                     placeholder="Nhập mật khẩu giáo viên..."
                     className="w-full pl-3 pr-10 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl focus:outline-hidden focus:border-emerald-500 font-mono text-sm tracking-widest placeholder:text-slate-600 placeholder:tracking-normal placeholder:font-sans transition-all"
                   />
