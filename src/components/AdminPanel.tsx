@@ -370,10 +370,10 @@ export default function AdminPanel({
           console.error('Express sync failed in AdminPanel:', e);
         }
       } else {
-        // Vercel / GitHub Pages: Connect to central, fixed public KVDB store
+        // Vercel / GitHub Pages: Connect directly to our high-speed, unlimited-capacity AI Studio Express Backend!
         try {
-          const res = await fetch('https://kvdb.io/kb098f950bcd14424d9951/quickquiz_hoangquang_db', {
-            method: 'PUT',
+          const res = await fetch('https://ais-dev-ak6xjrfx2wya5gr4qa7guj-179141037005.asia-southeast1.run.app/api/sync-state', {
+            method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
@@ -383,7 +383,7 @@ export default function AdminPanel({
             success = true;
           }
         } catch (e) {
-          console.error('KVDB sync failed in AdminPanel:', e);
+          console.error('Direct backend sync failed in AdminPanel:', e);
         }
       }
 
