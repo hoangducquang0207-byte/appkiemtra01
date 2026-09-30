@@ -6,15 +6,18 @@
 import React, { useState } from 'react';
 import { Award, BookOpen, Users, Lock, Eye, EyeOff, Shield, LogIn } from 'lucide-react';
 import { Class, generateStudentPassword, TeacherAccount } from '../types';
+import { normalizeStr } from '../firebaseSync';
 
 interface AppLoginPortalProps {
   passwords: { gv: string; hs: string; admin: string };
   classes: Class[];
   teachers: TeacherAccount[];
+  isDbLoading?: boolean;
+  dbLoadError?: string | null;
   onLogin: (role: 'gv' | 'hs' | 'admin', profile?: any) => void;
 }
 
-export default function AppLoginPortal({ passwords, classes, teachers, onLogin }: AppLoginPortalProps) {
+export default function AppLoginPortal({ passwords, classes, teachers, isDbLoading = false, dbLoadError = null, onLogin }: AppLoginPortalProps) {
   const [selectedRole, setSelectedRole] = useState<'gv' | 'hs' | 'admin'>('gv');
   const [passwordInput, setPasswordInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
@@ -53,16 +56,32 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
     setErrorText('');
 
     if (selectedRole === 'hs') {
-      const classPass = classPassInput.trim();
-      const studentPass = studentPassInput.trim();
+      if (isDbLoading) {
+        setErrorText('Hệ thống đang tải dữ liệu lớp học... Vui lòng đợi trong giây lát.');
+        return;
+      }
+      if (dbLoadError) {
+        setErrorText(dbLoadError);
+        return;
+      }
+      if (!classes || classes.length === 0) {
+        setErrorText('Không thể tải dữ liệu lớp học');
+        return;
+      }
+
+      const classPass = classPassInput;
+      const studentPass = studentPassInput;
 
       if (!classPass || !studentPass) {
         setErrorText('Vui lòng nhập đầy đủ cả hai mật khẩu!');
         return;
       }
 
+      const normalizedClassPass = normalizeStr(classPass);
+      const normalizedStudentPass = normalizeStr(studentPass);
+
       // Hardcoded fallback student login for guaranteed offline demo access
-      if (classPass === '123456' && studentPass === '123456') {
+      if (normalizedClassPass === '123456' && normalizedStudentPass === '123456') {
         const studentProfile = {
           classId: 'c-01',
           subject: 'Tin học',
@@ -76,7 +95,7 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
       }
 
       // Find classes matching class password
-      const matchedClasses = classes.filter(c => c.joinPass.trim().toLowerCase() === classPass.trim().toLowerCase());
+      const matchedClasses = classes.filter(c => normalizeStr(c.joinPass) === normalizedClassPass);
       if (matchedClasses.length === 0) {
         setErrorText('Mật khẩu lớp chưa chính xác! Vui lòng kiểm tra lại.');
         return;
@@ -87,8 +106,8 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
 
       for (const c of matchedClasses) {
         const student = c.students.find(s => {
-          const expectedPass = (s.password || generateStudentPassword(s.name)).trim().toLowerCase();
-          return expectedPass === studentPass.trim().toLowerCase();
+          const expectedPass = normalizeStr(s.password || generateStudentPassword(s.name));
+          return expectedPass === normalizedStudentPass;
         });
         if (student) {
           foundClass = c;
@@ -459,9 +478,9 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
             </div>
           )}
 
-          {errorText && (
+          {(errorText || dbLoadError) && (
             <p className="text-xs text-red-400 font-bold bg-red-950/30 border border-red-900/30 px-3 py-2 rounded-lg animate-pulse">
-              ⚠️ {errorText}
+              ⚠️ {errorText || dbLoadError}
             </p>
           )}
 
@@ -487,10 +506,25 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
 
           <button
             type="submit"
-            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-650 hover:from-emerald-700 hover:to-teal-750 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-900/10 hover:shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
+            disabled={isDbLoading}
+            className={`w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-650 hover:from-emerald-700 hover:to-teal-750 text-white text-xs font-black rounded-xl shadow-lg shadow-emerald-900/10 hover:shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 uppercase tracking-wider ${
+              isDbLoading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+            }`}
           >
-            <LogIn className="w-4 h-4 text-emerald-100" />
-            Xác nhận truy cập
+            {isDbLoading ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Đang tải dữ liệu...
+              </>
+            ) : (
+              <>
+                <LogIn className="w-4 h-4 text-emerald-100" />
+                Xác nhận truy cập
+              </>
+            )}
           </button>
         </form>
       </div>
