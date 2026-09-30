@@ -376,76 +376,7 @@ export default function App() {
     return null;
   };
 
-  // Synchronize state with central database on startup
-  useEffect(() => {
-    const fetchCentralDatabase = async () => {
-      try {
-        const db = await syncWithServerDb('read');
-        if (db) {
-          // If the central database is empty (first initialization), and the current user is admin, push current state
-          const hasCentralData = db.teachers && db.teachers.length > 0;
-          if (!hasCentralData) {
-            const currentUserEmail = currentUser?.email || '';
-            const isAdminUser = currentUserEmail.toLowerCase() === 'hoangducquang0207@gmail.com' || currentUserEmail.toLowerCase() === 'gv@quickquiz.vn';
-            if (isAdminUser) {
-              const existing = localStorage.getItem(APP_ID);
-              const parsed = existing ? JSON.parse(existing) : null;
-              if (parsed) {
-                await syncWithServerDb('write', parsed);
-              }
-            }
-            return;
-          }
-
-          // Otherwise, overwrite local states with the centralized database!
-          if (db.teachers && db.teachers.length > 0) {
-            setTeachers(db.teachers);
-          }
-          if (db.classes && db.classes.length > 0) {
-            setClasses(db.classes);
-          }
-          if (db.questions && db.questions.length > 0) {
-            setQuestions(db.questions);
-          }
-          if (db.exams && db.exams.length > 0) {
-            setExams(db.exams);
-          }
-          if (db.assignments && db.assignments.length > 0) {
-            setAssignments(db.assignments);
-          }
-          if (db.submissions && db.submissions.length > 0) {
-            setSubmissions(db.submissions);
-          }
-          if (db.syllabus && db.syllabus.length > 0) {
-            setSyllabus(db.syllabus);
-          }
-
-          // Sync back to local storage
-          const existing = localStorage.getItem(APP_ID);
-          const parsed = existing ? JSON.parse(existing) : {};
-          const mergedPayload = {
-            ...parsed,
-            teachers: db.teachers || parsed.teachers || [],
-            classes: db.classes || parsed.classes || [],
-            questions: db.questions || parsed.questions || [],
-            exams: db.exams || parsed.exams || [],
-            assignments: db.assignments || parsed.assignments || [],
-            submissions: db.submissions || parsed.submissions || [],
-            syllabus: db.syllabus || parsed.syllabus || [],
-          };
-          localStorage.setItem(APP_ID, JSON.stringify(mergedPayload));
-        }
-      } catch (err) {
-        console.warn('Could not sync with central database on startup:', err);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      fetchCentralDatabase();
-    }, 600);
-
-    return () => clearTimeout(timer);
-  }, []);
+  // Removed legacy central database fetching to prevent overwriting new live Firestore database states
 
   // Sync state to local storage helper and Firestore cloud database
   const syncToLocalStorage = (updatedState: Partial<GlobalState>) => {
