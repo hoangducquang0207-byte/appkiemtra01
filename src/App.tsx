@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { GlobalState, Class, Syllabus, Chapter, Question, Exam, Assignment, Submission, AppSettings, generateStudentPassword, TeacherAccount } from './types';
+import { saveStateToFirestore, loadStateFromFirestore } from './firebaseSync';
 import {
   DEFAULT_CLASSES,
   DEFAULT_SYLLABUS,
@@ -132,6 +133,9 @@ export default function App() {
     geminiKey: '',
   });
 
+  const [isDbLoading, setIsDbLoading] = useState(true);
+  const [dbLoadError, setDbLoadError] = useState<string | null>(null);
+
   const [isMuted, setIsMuted] = useState(() => soundManager.isMuted());
 
   const handleToggleMute = () => {
@@ -169,7 +173,7 @@ export default function App() {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [isSidebarInvisible, setIsSidebarInvisible] = useState(false);
 
-  // Initial Load
+  // Initial Load with Firestore Cloud DB integration
   useEffect(() => {
     // Check for "db" parameter to register shared database instantly
     try {
@@ -177,7 +181,6 @@ export default function App() {
       const urlDbId = params.get('db');
       if (urlDbId && urlDbId.trim().length > 5) {
         localStorage.setItem('quickquiz-shared-db-id', urlDbId.trim());
-        // Clean URL parameter to keep it clean and beautiful
         const cleanUrl = window.location.pathname;
         window.history.replaceState({}, '', cleanUrl);
       }
@@ -185,124 +188,128 @@ export default function App() {
       console.warn('URLSearchParams error:', e);
     }
 
-    try {
-      const data = localStorage.getItem(APP_ID);
-      if (data) {
-        const parsed = JSON.parse(data);
-        
-        // 1. Load syllabus and merge any missing "Tin học" syllabus for grades 6, 7, 8, 9
-        let currentSyllabus = parsed.syllabus || [];
-        const infGrades = ['6', '7', '8', '9'];
-        let hasSyllabusUpdates = false;
+    const initAppData = async () => {
+      setIsDbLoading(true);
+      setDbLoadError(null);
 
-        infGrades.forEach(g => {
-          const hasInformatics = currentSyllabus.some((s: any) => s.grade === g && s.subject === 'Tin học');
-          if (!hasInformatics) {
-            const defaultInfSyllabus = DEFAULT_SYLLABUS.find(s => s.grade === g && s.subject === 'Tin học');
-            if (defaultInfSyllabus) {
-              currentSyllabus.push(defaultInfSyllabus);
-              hasSyllabusUpdates = true;
-            }
-          }
-        });
+      try {
+        // Try to load state from Firestore
+        const cloudState = await loadStateFromFirestore();
 
-        // If grade 8 Informatics syllabus exists but is outdated, replace it with the new detailed one
-        const grade8InfIndex = currentSyllabus.findIndex((s: any) => s.grade === '8' && s.subject === 'Tin học');
-        if (grade8InfIndex !== -1) {
-          const sy8 = currentSyllabus[grade8InfIndex];
-          const isOutdated = sy8.chapters.some((ch: any) => ch.id === 'ch-03' || ch.id === 'ch-04');
-          if (isOutdated) {
-            const defaultInfSyllabus = DEFAULT_SYLLABUS.find(s => s.grade === '8' && s.subject === 'Tin học');
-            if (defaultInfSyllabus) {
-              currentSyllabus[grade8InfIndex] = defaultInfSyllabus;
-              hasSyllabusUpdates = true;
-            }
-          }
-        }
+        if (cloudState) {
+          setClasses(cloudState.classes || []);
+          setTeachers(cloudState.teachers || []);
+          setQuestions(cloudState.questions || []);
+          setExams(cloudState.exams || []);
+          setAssignments(cloudState.assignments || []);
+          setSubmissions(cloudState.submissions || []);
+          setSyllabus(cloudState.syllabus || []);
 
-        // 2. Load questions and merge any missing default Informatics questions
-        let currentQuestions = parsed.questions || [];
-        let hasQuestionUpdates = false;
-        
-        DEFAULT_QUESTIONS.forEach(dq => {
-          if (dq.subject === 'Tin học') {
-            const exists = currentQuestions.some((q: any) => q.content.trim().toLowerCase() === dq.content.trim().toLowerCase());
-            if (!exists) {
-              currentQuestions.push(dq);
-              hasQuestionUpdates = true;
-            }
-          }
-        });
-
-        // Map outdated q-05 and q-06 to the new syllabus chapters if they exist in user's bank
-        currentQuestions = currentQuestions.map((q: any) => {
-          if (q.id === 'q-05' && q.chapterId === 'ch-03') {
-            hasQuestionUpdates = true;
-            return { ...q, chapterId: 'inf-ch1-8', lessonId: 'inf-le1-8', topic: 'Chủ đề 1. Máy tính và cộng đồng - Bài 1. Lược sử công cụ tính toán' };
-          }
-          if (q.id === 'q-06' && q.chapterId === 'ch-03') {
-            hasQuestionUpdates = true;
-            return { ...q, chapterId: 'inf-ch2-8', lessonId: 'inf-le2-8', topic: 'Chủ đề 2. Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin - Bài 2. Thông tin trong môi trường số' };
-          }
-          return q;
-        });
-
-        setClasses(parsed.classes || []);
-        setQuestions(currentQuestions);
-        setExams(parsed.exams || []);
-        setAssignments(parsed.assignments || []);
-        setSubmissions(parsed.submissions || []);
-        setSyllabus(currentSyllabus);
-        
-        let loadedTeachers = parsed.teachers || [
-          {
-            id: 't-01',
-            name: 'Nguyễn Văn A',
-            email: 'gv@quickquiz.vn',
-            password: '123456',
-            phone: '0912 345 678',
-            department: 'Khoa học tự nhiên',
-            subject: 'Khoa học tự nhiên',
-            school: 'Trường THCS Nguyễn Du'
-          }
-        ];
-        
-        // Ensure hoangducquang0207@gmail.com is present in teachers list
-        const targetEmail = 'hoangducquang0207@gmail.com';
-        const hasTarget = loadedTeachers.some((t: any) => t.email.toLowerCase() === targetEmail.toLowerCase());
-        if (!hasTarget) {
-          loadedTeachers.push({
-            id: 't-02',
-            name: 'Đức Quang',
-            email: targetEmail,
-            password: '123456',
-            phone: '0988 888 888',
-            department: 'Khoa học tự nhiên',
-            subject: 'Khoa học tự nhiên',
-            school: 'Trường THCS Nguyễn Du'
-          });
-          hasSyllabusUpdates = true;
-        }
-
-        if (hasSyllabusUpdates || hasQuestionUpdates) {
-          const updatedPayload = {
-            ...parsed,
-            syllabus: currentSyllabus,
-            questions: currentQuestions,
-            teachers: loadedTeachers
+          // Save backup offline to localStorage
+          const localPayload = {
+            classes: cloudState.classes,
+            teachers: cloudState.teachers,
+            questions: cloudState.questions,
+            exams: cloudState.exams,
+            assignments: cloudState.assignments,
+            submissions: cloudState.submissions,
+            syllabus: cloudState.syllabus,
+            settings: settings
           };
-          localStorage.setItem(APP_ID, JSON.stringify(updatedPayload));
+          localStorage.setItem(APP_ID, JSON.stringify(localPayload));
+          setIsDbLoading(false);
+          setDbLoadError(null);
+        } else {
+          // Firestore is empty (first-time database setup or fresh deployment)
+          // Seed Firestore with local localStorage data OR hardcoded defaults
+          let localPayload: any = null;
+          try {
+            const data = localStorage.getItem(APP_ID);
+            if (data) {
+              localPayload = JSON.parse(data);
+            }
+          } catch (e) {}
+
+          const finalClasses = localPayload?.classes || DEFAULT_CLASSES;
+          const finalTeachers = localPayload?.teachers || [
+            {
+              id: 't-01',
+              name: 'Nguyễn Văn A',
+              email: 'gv@quickquiz.vn',
+              password: '123456',
+              phone: '0912 345 678',
+              department: 'Khoa học tự nhiên',
+              subject: 'Khoa học tự nhiên',
+              school: 'Trường THCS Nguyễn Du'
+            },
+            {
+              id: 't-02',
+              name: 'Đức Quang',
+              email: 'hoangducquang0207@gmail.com',
+              password: '123456',
+              phone: '0988 888 888',
+              department: 'Khoa học tự nhiên',
+              subject: 'Khoa học tự nhiên',
+              school: 'Trường THCS Nguyễn Du'
+            }
+          ];
+          const finalQuestions = localPayload?.questions || DEFAULT_QUESTIONS;
+          const finalExams = localPayload?.exams || DEFAULT_EXAMS;
+          const finalAssignments = localPayload?.assignments || DEFAULT_ASSIGNMENTS;
+          const finalSubmissions = localPayload?.submissions || DEFAULT_SUBMISSIONS;
+          const finalSyllabus = localPayload?.syllabus || DEFAULT_SYLLABUS;
+
+          const seedState = {
+            classes: finalClasses,
+            teachers: finalTeachers,
+            questions: finalQuestions,
+            exams: finalExams,
+            assignments: finalAssignments,
+            submissions: finalSubmissions,
+            syllabus: finalSyllabus
+          };
+
+          setClasses(finalClasses);
+          setTeachers(finalTeachers);
+          setQuestions(finalQuestions);
+          setExams(finalExams);
+          setAssignments(finalAssignments);
+          setSubmissions(finalSubmissions);
+          setSyllabus(finalSyllabus);
+
+          // Push to cloud Firestore database to populate it permanently
+          await saveStateToFirestore(seedState);
+
+          localStorage.setItem(APP_ID, JSON.stringify({ ...seedState, settings }));
+          setIsDbLoading(false);
+          setDbLoadError(null);
         }
+      } catch (err) {
+        console.error('Failed to load from Firestore, attempting local storage fallback:', err);
         
-        setTeachers(loadedTeachers);
-        setSettings(parsed.settings || { soundEnabled: true, darkMode: false, primaryColor: '#10b981', geminiKey: '' });
-      } else {
-        handleResetToDefault();
+        try {
+          const data = localStorage.getItem(APP_ID);
+          if (data) {
+            const parsed = JSON.parse(data);
+            setClasses(parsed.classes || []);
+            setTeachers(parsed.teachers || []);
+            setQuestions(parsed.questions || []);
+            setExams(parsed.exams || []);
+            setAssignments(parsed.assignments || []);
+            setSubmissions(parsed.submissions || []);
+            setSyllabus(parsed.syllabus || []);
+            setIsDbLoading(false);
+            setDbLoadError(null);
+            return;
+          }
+        } catch (e) {}
+
+        setIsDbLoading(false);
+        setDbLoadError('Không thể tải dữ liệu lớp học');
       }
-    } catch (err) {
-      console.error('Error parsed data:', err);
-      handleResetToDefault();
-    }
+    };
+
+    initAppData();
   }, []);
 
   // Helper to sync state to/from server DB or public cloud KV database (e.g. on Vercel/GitHub Pages)
@@ -440,24 +447,35 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Sync state to local storage helper and central backend / public cloud KV
+  // Sync state to local storage helper and Firestore cloud database
   const syncToLocalStorage = (updatedState: Partial<GlobalState>) => {
     try {
       const existing = localStorage.getItem(APP_ID);
       const parsed = existing ? JSON.parse(existing) : {};
       const payload = {
-        classes: updatedState.classes !== undefined ? updatedState.classes : parsed.classes || classes,
-        questions: updatedState.questions !== undefined ? updatedState.questions : parsed.questions || questions,
-        exams: updatedState.exams !== undefined ? updatedState.exams : parsed.exams || exams,
-        assignments: updatedState.assignments !== undefined ? updatedState.assignments : parsed.assignments || assignments,
-        submissions: updatedState.submissions !== undefined ? updatedState.submissions : parsed.submissions || submissions,
-        syllabus: updatedState.syllabus !== undefined ? updatedState.syllabus : parsed.syllabus || syllabus,
-        teachers: updatedState.teachers !== undefined ? updatedState.teachers : parsed.teachers || teachers,
-        settings: updatedState.settings !== undefined ? updatedState.settings : parsed.settings || settings,
+        classes: updatedState.classes !== undefined ? updatedState.classes : classes,
+        questions: updatedState.questions !== undefined ? updatedState.questions : questions,
+        exams: updatedState.exams !== undefined ? updatedState.exams : exams,
+        assignments: updatedState.assignments !== undefined ? updatedState.assignments : assignments,
+        submissions: updatedState.submissions !== undefined ? updatedState.submissions : submissions,
+        syllabus: updatedState.syllabus !== undefined ? updatedState.syllabus : syllabus,
+        teachers: updatedState.teachers !== undefined ? updatedState.teachers : teachers,
+        settings: updatedState.settings !== undefined ? updatedState.settings : settings,
       };
       localStorage.setItem(APP_ID, JSON.stringify(payload));
 
-      // Asynchronously synchronize with server/cloud KV
+      // Asynchronously synchronize with Firestore cloud database
+      saveStateToFirestore({
+        classes: updatedState.classes !== undefined ? updatedState.classes : classes,
+        teachers: updatedState.teachers !== undefined ? updatedState.teachers : teachers,
+        exams: updatedState.exams !== undefined ? updatedState.exams : exams,
+        assignments: updatedState.assignments !== undefined ? updatedState.assignments : assignments,
+        submissions: updatedState.submissions !== undefined ? updatedState.submissions : submissions,
+        syllabus: updatedState.syllabus !== undefined ? updatedState.syllabus : syllabus,
+        questions: updatedState.questions !== undefined ? updatedState.questions : questions,
+      }).catch(err => console.error('Cloud Firestore background synchronization failed:', err));
+
+      // Asynchronously synchronize with secondary Express backup
       syncWithServerDb('write', payload);
 
     } catch (err) {
@@ -1236,6 +1254,8 @@ export default function App() {
         passwords={passwords}
         classes={classes}
         teachers={teachers}
+        isDbLoading={isDbLoading}
+        dbLoadError={dbLoadError}
         onLogin={(role, profile) => {
           if (role === 'hs' && profile) {
             localStorage.setItem('quickquiz-student-setup-v1', JSON.stringify(profile));
