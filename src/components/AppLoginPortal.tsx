@@ -158,6 +158,19 @@ export default function AppLoginPortal({ passwords, classes, teachers, onLogin }
             greeting: 'Học tập thật giỏi các em nhé!',
             avatarColor: 'emerald'
           };
+        } else if (emailLower === 'quanghoangduc0227@gmail.com' || emailLower === 'hoangducquang0227@gmail.com') {
+          matchedProfile = {
+            uid: 't-nguyen-quang',
+            name: 'Nguyễn Quang',
+            email: emailLower,
+            phone: '0987400704',
+            school: 'Trường THCS Phước Thái',
+            academicTitle: 'Cử nhân',
+            department: 'Toán',
+            bio: 'Giáo viên Toán trường THCS Phước Thái.',
+            greeting: 'Chào mừng các em học sinh đến với lớp học Toán!',
+            avatarColor: 'emerald'
+          };
         }
       }
 
