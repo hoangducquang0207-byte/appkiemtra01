@@ -337,30 +337,32 @@ export default function App() {
         }
       }
     } else {
-      // 2. On Vercel / GitHub Pages: Connect to central, fixed public KVDB store
-      const KV_URL = 'https://kvdb.io/kb098f950bcd14424d9951/quickquiz_hoangquang_db';
+      // 2. On Vercel / GitHub Pages: Connect directly to our high-speed, unlimited-capacity AI Studio Express Backend!
+      const BACKEND_URL = 'https://ais-dev-ak6xjrfx2wya5gr4qa7guj-179141037005.asia-southeast1.run.app/api/sync-state';
 
       if (action === 'write' && payloadToSave) {
         try {
-          const res = await fetch(KV_URL, {
-            method: 'PUT',
+          const res = await fetch(BACKEND_URL, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payloadToSave)
           });
           return res.ok;
         } catch (err) {
-          console.error('Public KV sync failed in App.tsx:', err);
+          console.error('Direct backend sync failed in App.tsx:', err);
           return false;
         }
       } else if (action === 'read') {
         try {
-          const res = await fetch(KV_URL);
+          const res = await fetch(BACKEND_URL);
           if (res.ok) {
-            const db = await res.json();
-            return db;
+            const data = await res.json();
+            if (data && data.success && data.db) {
+              return data.db;
+            }
           }
         } catch (err) {
-          console.error('Public KV fetch failed in App.tsx:', err);
+          console.error('Direct backend fetch failed in App.tsx:', err);
         }
       }
     }
