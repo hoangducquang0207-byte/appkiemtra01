@@ -135,6 +135,7 @@ export default function App() {
 
   const [isDbLoading, setIsDbLoading] = useState(true);
   const [dbLoadError, setDbLoadError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [isMuted, setIsMuted] = useState(() => soundManager.isMuted());
 
@@ -396,6 +397,7 @@ export default function App() {
       localStorage.setItem(APP_ID, JSON.stringify(payload));
 
       // Asynchronously synchronize with Firestore cloud database
+      setIsSyncing(true);
       saveStateToFirestore({
         classes: updatedState.classes !== undefined ? updatedState.classes : classes,
         teachers: updatedState.teachers !== undefined ? updatedState.teachers : teachers,
@@ -404,7 +406,12 @@ export default function App() {
         submissions: updatedState.submissions !== undefined ? updatedState.submissions : submissions,
         syllabus: updatedState.syllabus !== undefined ? updatedState.syllabus : syllabus,
         questions: updatedState.questions !== undefined ? updatedState.questions : questions,
-      }).catch(err => console.error('Cloud Firestore background synchronization failed:', err));
+      })
+        .then(() => setIsSyncing(false))
+        .catch(err => {
+          console.error('Cloud Firestore background synchronization failed:', err);
+          setIsSyncing(false);
+        });
 
       // Asynchronously synchronize with secondary Express backup
       syncWithServerDb('write', payload);
@@ -1797,11 +1804,31 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="p-4 bg-slate-950 border-t border-slate-850 text-[10px] text-slate-500 font-extrabold flex justify-between tracking-wide select-none">
-                <span>V2.5 MVP React</span>
-                <span className="text-emerald-500 animate-pulse flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Trực tuyến
-                </span>
+              <div className="p-4 bg-slate-950 border-t border-slate-850 text-[10px] font-extrabold flex flex-col gap-1.5 select-none">
+                <div className="flex justify-between items-center text-slate-500">
+                  <span>HỆ THỐNG</span>
+                  <span>V2.5 FIRESTORE</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">TRẠNG THÁI:</span>
+                  {dbLoadError ? (
+                    <span className="text-rose-500 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>Mất kết nối
+                    </span>
+                  ) : isDbLoading ? (
+                    <span className="text-amber-500 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>Đang tải...
+                    </span>
+                  ) : isSyncing ? (
+                    <span className="text-sky-400 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-spin"></span>Đang đồng bộ...
+                    </span>
+                  ) : (
+                    <span className="text-emerald-500 flex items-center gap-1" title="Toàn bộ môn học, lớp học và tài khoản đã được đồng bộ lên đám mây thành công">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Đã kết nối mây
+                    </span>
+                  )}
+                </div>
               </div>
             </aside>
           )}
