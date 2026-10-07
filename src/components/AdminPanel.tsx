@@ -33,6 +33,7 @@ import {
   UserCog
 } from 'lucide-react';
 import { TeacherAccount, Class, Question, Assignment, Submission, generateStudentPassword } from '../types';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 interface AdminPanelProps {
   teachers: TeacherAccount[];
@@ -71,7 +72,7 @@ export default function AdminPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const origin = window.location.origin;
-  const sharedSyncLink = `${origin}/`;
+  const sharedSyncLink = `${origin}/?db=${firebaseConfig.firestoreDatabaseId}`;
 
   const handleCopySharedLink = () => {
     if (!sharedSyncLink) return;
