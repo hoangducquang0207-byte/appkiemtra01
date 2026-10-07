@@ -34,6 +34,7 @@ import AppLoginPortal from './components/AppLoginPortal';
 import TeacherConfig, { TeacherProfile } from './components/TeacherConfig';
 import { soundManager } from './sound';
 import GiftedMathExams from './components/GiftedMathExams';
+import ShareAppPanel from './components/ShareAppPanel';
 
 // Icons
 import {
@@ -68,6 +69,7 @@ import {
   Key,
   Volume2,
   VolumeX,
+  Share2,
 } from 'lucide-react';
 
 const APP_ID = 'quickquiz-thcs-thpt-pro';
@@ -1753,6 +1755,15 @@ export default function App() {
                       <User className="w-4 h-4 text-emerald-500 animate-pulse" />
                       <span>Cấu hình giáo viên</span>
                     </button>
+                    <button
+                      onClick={() => navigateTo('share-app')}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                        currentModule === 'share-app' ? 'text-emerald-400 bg-slate-800/80' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-850'
+                      }`}
+                    >
+                      <Share2 className="w-4 h-4 text-emerald-500 animate-pulse" />
+                      <span>Chia sẻ App cho HS</span>
+                    </button>
                   </>
                 )}
 
@@ -1956,6 +1967,10 @@ export default function App() {
                   showToast('Hồ sơ học vụ giáo viên đã lưu thành công!');
                 }}
               />
+            )}
+
+            {currentModule === 'share-app' && (
+              <ShareAppPanel onBack={() => navigateTo('home')} />
             )}
 
             {currentModule === 'student-tests' && (
