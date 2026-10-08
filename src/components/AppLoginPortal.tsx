@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Award, BookOpen, Users, Lock, Eye, EyeOff, Shield, LogIn } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Award, BookOpen, Users, Lock, Eye, EyeOff, Shield, LogIn, RefreshCw } from 'lucide-react';
 import { Class, generateStudentPassword, TeacherAccount } from '../types';
 import { normalizeStr } from '../firebaseSync';
 
@@ -15,10 +15,17 @@ interface AppLoginPortalProps {
   isDbLoading?: boolean;
   dbLoadError?: string | null;
   onLogin: (role: 'gv' | 'hs' | 'admin', profile?: any) => void;
+  onRefreshDatabase?: () => Promise<void>;
 }
 
-export default function AppLoginPortal({ passwords, classes, teachers, isDbLoading = false, dbLoadError = null, onLogin }: AppLoginPortalProps) {
+export default function AppLoginPortal({ passwords, classes, teachers, isDbLoading = false, dbLoadError = null, onLogin, onRefreshDatabase }: AppLoginPortalProps) {
   const [selectedRole, setSelectedRole] = useState<'gv' | 'hs' | 'admin'>('gv');
+
+  useEffect(() => {
+    if (onRefreshDatabase) {
+      onRefreshDatabase().catch(err => console.error('Silent background database refresh failed:', err));
+    }
+  }, []);
   const [passwordInput, setPasswordInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -269,6 +276,29 @@ export default function AppLoginPortal({ passwords, classes, teachers, isDbLoadi
           <p className="text-xs text-slate-400 font-semibold tracking-wide uppercase">
             Hệ thống biên soạn đề thi & số hóa học vụ THCS/THPT
           </p>
+          <div className="flex justify-center pt-1">
+            {isDbLoading ? (
+              <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-400 font-black uppercase rounded-full animate-pulse">
+                <RefreshCw className="w-2.5 h-3 animate-spin" />
+                Đang nạp dữ liệu mây...
+              </div>
+            ) : dbLoadError ? (
+              <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-500/10 border border-rose-500/20 text-[9px] text-rose-400 font-black uppercase rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                Lỗi nạp database mây
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onRefreshDatabase?.()}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-[9px] text-emerald-400 font-black uppercase rounded-full cursor-pointer transition-colors"
+                title="Đã tải cơ sở dữ liệu đám mây mới nhất. Click để tải lại thủ công."
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Đồng bộ Đám mây thành công
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Roles select grid */}
