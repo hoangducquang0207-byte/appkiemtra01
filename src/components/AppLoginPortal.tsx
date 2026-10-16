@@ -25,6 +25,28 @@ export default function AppLoginPortal({ passwords, classes, teachers, isDbLoadi
     if (onRefreshDatabase) {
       onRefreshDatabase().catch(err => console.error('Silent background database refresh failed:', err));
     }
+
+    try {
+      // Auto pre-fill from URL query param (e.g. ?class=TOAN914 or ?join=TOAN914)
+      const params = new URLSearchParams(window.location.search);
+      const urlClass = params.get('class') || params.get('join') || params.get('code') || params.get('lop');
+      const urlRole = params.get('role');
+      if (urlClass) {
+        setSelectedRole('hs');
+        setClassPassInput(urlClass.trim());
+      } else if (urlRole === 'hs') {
+        setSelectedRole('hs');
+      }
+
+      // Pre-fill remembered class pass on this device if available
+      const savedStudent = localStorage.getItem('quickquiz-student-setup-v1');
+      if (savedStudent && !urlClass) {
+        const parsed = JSON.parse(savedStudent);
+        if (parsed.classPass) {
+          setClassPassInput(parsed.classPass);
+        }
+      }
+    } catch (e) {}
   }, []);
 
   const [passwordInput, setPasswordInput] = useState('');
@@ -173,6 +195,18 @@ export default function AppLoginPortal({ passwords, classes, teachers, isDbLoadi
           studentId: matchResult.foundStudent.id,
           isConfirmed: true,
         };
+
+        try {
+          localStorage.setItem(
+            'quickquiz-student-setup-v1',
+            JSON.stringify({
+              classId: matchResult.foundClass.id,
+              studentId: matchResult.foundStudent.id,
+              classPass,
+              studentPass,
+            })
+          );
+        } catch (e) {}
 
         setErrorText('');
         onLogin('hs', studentProfile);
@@ -427,6 +461,10 @@ export default function AppLoginPortal({ passwords, classes, teachers, isDbLoadi
                     }}
                     autoFocus
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    autoComplete="off"
                     placeholder="Nhập Mật khẩu lớp do Giáo viên cung cấp..."
                     className="w-full pl-3 pr-10 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl focus:outline-hidden focus:border-emerald-500 font-mono text-sm tracking-widest transition-all"
                   />
@@ -453,6 +491,10 @@ export default function AppLoginPortal({ passwords, classes, teachers, isDbLoadi
                       setErrorText('');
                     }}
                     required
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    autoComplete="off"
                     placeholder="Nhập họ tên viết liền không dấu (VD: nguyenvanan)..."
                     className="w-full pl-3 pr-10 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl focus:outline-hidden focus:border-emerald-500 font-mono text-sm tracking-widest transition-all"
                   />
@@ -464,6 +506,9 @@ export default function AppLoginPortal({ passwords, classes, teachers, isDbLoadi
                     {showStudentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <p className="text-[11px] text-slate-400 font-medium pt-0.5">
+                  💡 Nhập tiếng Việt có dấu hay không dấu đều được (tự động chuẩn hóa trên iPhone, iPad, Android & Máy tính).
+                </p>
               </div>
             </>
           ) : selectedRole === 'gv' ? (

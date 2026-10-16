@@ -160,7 +160,7 @@ export interface GlobalState {
 }
 
 export function removeVietnameseTones(str: string): string {
-  let s = String(str || '');
+  let s = String(str || '').replace(/\u00a0/g, ' ');
   s = s.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
   s = s.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
   s = s.replace(/ì|í|ị|ỉ|ĩ/g, "i");
@@ -175,16 +175,18 @@ export function removeVietnameseTones(str: string): string {
   s = s.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
   s = s.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
   s = s.replace(/Đ/g, "D");
-  // Combine accents with diacritical marks
+  // Combine accents with diacritical marks (NFD) for iOS Safari / Mobile IME compatibility
   s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  s = s.replace(/đ/g, "d").replace(/Đ/g, "D");
   return s;
 }
 
 // Strips STT prefix like "1. ", "01 - ", "1/ ", "[1] ", "STT 1: ", "1:" from student name
 export function cleanStudentName(name: string): string {
   return String(name || '')
+    .replace(/\u00a0/g, ' ')
     .trim()
-    .replace(/^(STT\s*\:?\s*\d+\s*[\:\.\-\/]?|\[?\d+\]?[\.\-\/\:\s]+)\s*/i, '') // Removes "STT 1: ", "1. ", "01 - ", "1/ ", "[1] "
+    .replace(/^(STT\s*\:?\s*\d+\s*[\:\.\-\/]?|\[?\d+\]?[\.\-\/\:\s]+)\s*/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -193,7 +195,7 @@ export function generateStudentPassword(name: string): string {
   const cleanedName = cleanStudentName(name);
   return removeVietnameseTones(cleanedName)
     .toLowerCase()
-    .replace(/\s+/g, '');
+    .replace(/[^a-z0-9]/g, '');
 }
 
 export function generateSecureStudentPasscode(): string {
@@ -218,32 +220,43 @@ export function verifyStudentLogin(
 
   if (!rawClassPass || !rawStudentPass) return null;
 
-  const normClassPass = rawClassPass.toLowerCase().replace(/\s+/g, ' ').normalize('NFKC');
-  const normStudentPass = rawStudentPass.toLowerCase().replace(/\s+/g, ' ').normalize('NFKC');
+  const classPassWithSpace = rawClassPass.toLowerCase().replace(/\s+/g, ' ').normalize('NFKC');
+  const classPassNoSpace = rawClassPass.toLowerCase().replace(/[^a-z0-9]/g, '').normalize('NFKC');
 
-  // 1. STRICTLY MATCH CLASS BY CLASS JOIN PASS OR CODE OR ID
+  // 1. STRICTLY MATCH CLASS BY CLASS JOIN PASS OR CODE OR ID (tolerant of spaces on mobile keyboards)
   const matchedClasses = classes.filter((c) => {
-    const cPass = (c.joinPass || '').toLowerCase().replace(/\s+/g, ' ').trim().normalize('NFKC');
-    const cCode = (c.joinCode || '').toLowerCase().replace(/\s+/g, ' ').trim().normalize('NFKC');
-    const cId = (c.id || '').toLowerCase().replace(/\s+/g, ' ').trim().normalize('NFKC');
-    return cPass === normClassPass || cCode === normClassPass || cId === normClassPass;
+    if (!c) return false;
+    const cPass = (c.joinPass || '').toLowerCase().trim().normalize('NFKC');
+    const cPassNoSpace = cPass.replace(/[^a-z0-9]/g, '');
+    const cCode = (c.joinCode || '').toLowerCase().trim().normalize('NFKC');
+    const cCodeNoSpace = cCode.replace(/[^a-z0-9]/g, '');
+    const cId = (c.id || '').toLowerCase().trim().normalize('NFKC');
+
+    return (
+      cPass === classPassWithSpace ||
+      cPassNoSpace === classPassNoSpace ||
+      cCode === classPassWithSpace ||
+      cCodeNoSpace === classPassNoSpace ||
+      cId === classPassWithSpace
+    );
   });
 
   if (matchedClasses.length === 0) {
     return null;
   }
 
-  // 2. STRICTLY MATCH ENROLLED STUDENT BY PERSONAL PASSCODE OR UNACCENTED FULL NAME
+  // 2. MATCH ENROLLED STUDENT BY PERSONAL PASSCODE OR UNACCENTED FULL NAME
+  const inputNoSpace = rawStudentPass.toLowerCase().replace(/[^a-z0-9]/g, '').normalize('NFKC');
+  const inputUnaccented = removeVietnameseTones(rawStudentPass).toLowerCase().replace(/[^a-z0-9]/g, '');
+
   for (const c of matchedClasses) {
     if (!c.students || c.students.length === 0) continue;
 
     for (const s of c.students) {
-      if (!s) continue;
+      if (!s || !s.name) continue;
 
       const genPass = generateStudentPassword(s.name);
-      const studentPassNorm = (s.password || genPass).toLowerCase().replace(/\s+/g, '').normalize('NFKC');
-      const inputNoSpace = normStudentPass.replace(/\s+/g, '');
-      const inputUnaccented = removeVietnameseTones(normStudentPass).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const studentPassNorm = (s.password || genPass).toLowerCase().replace(/[^a-z0-9]/g, '').normalize('NFKC');
 
       if (
         (genPass && (inputNoSpace === genPass || inputUnaccented === genPass)) ||

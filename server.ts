@@ -179,13 +179,15 @@ function verifyStudentLoginOnServer(classes: any[], classPassInput: string, stud
   if (!classPassInput || !studentPassInput || !Array.isArray(classes)) return null;
 
   const normClassPass = classPassInput.toLowerCase().replace(/\s+/g, ' ').trim().normalize('NFKC');
-  const normStudentPass = studentPassInput.toLowerCase().replace(/\s+/g, '').trim().normalize('NFKC');
+  const classPassNoSpace = classPassInput.toLowerCase().replace(/[^a-z0-9]/g, '').normalize('NFKC');
+  const normStudentPass = studentPassInput.toLowerCase().replace(/[^a-z0-9]/g, '').trim().normalize('NFKC');
   const unaccentedInput = removeVietnameseTones(studentPassInput).toLowerCase().replace(/[^a-z0-9]/g, '');
 
   const matchedClasses = classes.filter((c) => {
     if (!c) return false;
     const cPass = (c.classPassword || c.joinPass || c.joinCode || '').toLowerCase().replace(/\s+/g, ' ').trim().normalize('NFKC');
-    return cPass === normClassPass;
+    const cPassNoSpace = cPass.replace(/[^a-z0-9]/g, '');
+    return cPass === normClassPass || cPassNoSpace === classPassNoSpace;
   });
 
   if (matchedClasses.length === 0) return null;
@@ -194,9 +196,9 @@ function verifyStudentLoginOnServer(classes: any[], classPassInput: string, stud
     if (!c.students || !Array.isArray(c.students)) continue;
 
     for (const s of c.students) {
-      if (!s) continue;
+      if (!s || !s.name) continue;
       const genPass = generateStudentPassword(s.name);
-      const customPassNorm = (s.password || genPass).toLowerCase().replace(/\s+/g, '').trim().normalize('NFKC');
+      const customPassNorm = (s.password || genPass).toLowerCase().replace(/[^a-z0-9]/g, '').trim().normalize('NFKC');
 
       if (
         (genPass && (normStudentPass === genPass || unaccentedInput === genPass)) ||
