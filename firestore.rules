@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserEmail() {
+      return isSignedIn() && request.auth.token.email != null 
+        ? request.auth.token.email.lower() 
+        : '';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        getUserEmail() == 'hoangducquang0207@gmail.com' ||
+        getUserEmail() == 'admin@quickquiz.vn' ||
+        request.auth.uid == 'admin-demo'
+      );
+    }
+
+    // Teacher check based strictly on trusted emails / admins (no email_verified bypass)
+    function isTeacher() {
+      return isSignedIn() && (
+        isAdmin() ||
+        getUserEmail() == 'hoangducquang0207@gmail.com' ||
+        getUserEmail() == 'hieunguyenhung1967@gmail.com' ||
+        getUserEmail() == 'hoangquang1611@gmail.com' ||
+        getUserEmail() == 'hoangquangntq@gmail.com' ||
+        getUserEmail() == 'quanghoangduc0227@gmail.com' ||
+        getUserEmail() == 'hoangducquang0227@gmail.com' ||
+        getUserEmail() == 'gv@quickquiz.vn' ||
+        getUserEmail() == 'admin@quickquiz.vn'
+      );
+    }
+
+    // Default Deny All Documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Classes Collection
+    match /metadata/classes {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isTeacher();
+    }
+
+    // Teachers Collection - Restricted to Teachers/Admins ONLY (Students forbidden)
+    match /metadata/teachers {
+      allow read: if isSignedIn() && isTeacher();
+      allow write: if isSignedIn() && isTeacher();
+    }
+
+    // Exams Collection
+    match /metadata/exams {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isTeacher();
+    }
+
+    // Assignments Collection
+    match /metadata/assignments {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isTeacher();
+    }
+
+    // Submissions Metadata Collection
+    match /metadata/submissions {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && isTeacher();
+    }
+
+    // Individual Submissions Collection
+    match /submissions_docs/{subId} {
+      allow create: if isSignedIn() && (
+        isTeacher() || (
+          request.resource.data.studentId == request.auth.uid &&
+          (!('graded' in request.resource.data) || request.resource.data.graded == false)
+        )
+      );
+      allow read: if isSignedIn() && (isTeacher() || resource.data.studentId == request.auth.uid);
+      allow update, delete: if isSignedIn() && isTeacher();
+    }
+
+    // Individual Drafts Collection
+    match /drafts_docs/{draftId} {
+      allow create: if isSignedIn() && (isTeacher() || request.resource.data.studentId == request.auth.uid);
+      allow read, update: if isSignedIn() && (isTeacher() || resource.data.studentId == request.auth.uid);
+      allow delete: if isSignedIn() && (isTeacher() || resource.data.studentId == request.auth.uid);
+    }
+
+    // Syllabus Collection
+    match /metadata/syllabus {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isTeacher();
+    }
+
+    // Questions Metadata Collection
+    match /metadata/questions_meta {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isTeacher();
+    }
+
+    // Questions Chunks Sub-collection
+    match /questions_chunks/{chunkId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isTeacher();
+    }
+  }
+}
+
